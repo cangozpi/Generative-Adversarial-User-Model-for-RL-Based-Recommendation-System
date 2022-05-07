@@ -27,7 +27,7 @@ size_user = sizes['session_new_index']
 size_item = sizes['item_new_index']
 
 data_user = raw_data.groupby(by='session_new_index')
-data_behavior = [[] for _ in xrange(size_user)]
+data_behavior = [[] for _ in range(size_user)]
 
 train_user = []
 vali_user = []
@@ -36,7 +36,7 @@ test_user = []
 sum_length = 0
 event_cnt = 0
 
-for user in xrange(size_user):
+for user in range(size_user):
     data_behavior[user] = [[], [], []]
     data_behavior[user][0] = user
     data_u = data_user.get_group(user)
@@ -53,7 +53,7 @@ for user in xrange(size_user):
     time_set.sort()
 
     true_t = 0
-    for t in xrange(len(time_set)):
+    for t in range(len(time_set)):
         display_set = data_u_time.get_group(time_set[t])
         event_cnt += 1
         sum_length += len(display_set)
