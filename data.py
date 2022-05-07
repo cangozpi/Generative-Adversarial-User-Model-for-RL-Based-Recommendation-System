@@ -54,7 +54,6 @@ class Dataset(nn.Module):
         for u in users:
             picked_item_features = [] # --> [time,features]
             for picked_item_id in data_behavior[u][2]:
-                
                 picked_item_features.append(item_features[picked_item_id])
            
             self.picked_item_features_per_user.append(picked_item_features)
@@ -71,8 +70,9 @@ class Dataset(nn.Module):
          
         """
         list_of_picked_item_features = self.picked_item_features_per_user[index] # --> [num_time_steps, picked_item_features]
-        
-        return list_of_picked_item_features
+        vector_length = len(list_of_picked_item_features) 
+
+        return list_of_picked_item_features, vector_length
 
 
     def __len__(self):
@@ -89,14 +89,25 @@ def custom_collate_fn(data):
             vector_length: length of the sequence (i.e. how many feature vectors are present)                
     """
     # pack Sequences here for LSTM batches with padded dimensions
-    length_vector = []
-    for d in data:
-        length_vector.append(len(d))
-    max_len = max(length_vector)
-    for d in data:
-        temp = np.zeros((804,max_len))
-        temp[:len(d)] = d
-    return torch.nn.utils.rnn.pack_padded_sequence(torch.tensor(data), [length_vector], batch_first=True)
+    # Record the length of the every time_step
+    lengths_list = []
+    for cur_vector, cur_vector_length in data:
+        lengths_list.append(cur_vector_length)
+
+    # longest time_step length. All of the sequences will be padded towards this value
+    max_length = max(lengths_list)
+    
+    # Create the padded vectors
+    batch_size = len(data)
+    feature_dim = len(data[0][0][0])
+    
+    padded_vectors = torch.zeros(batch_size, max_length, feature_dim) # --> [batch_size, max(num_time_steps), feature_dim]
+    for i, (cur_vector, cur_vector_length) in enumerate(data):
+        cur_vector = torch.tensor(cur_vector[0])
+        padded_vectors[i, :cur_vector_length] = cur_vector
+
+    
+    return torch.nn.utils.rnn.pack_padded_sequence(padded_vectors, lengths_list, batch_first=True, enforce_sorted = False) 
     
 
 
@@ -141,17 +152,27 @@ if __name__ == "__main__":
     
     # Initialize Dataloaders
     train_dataset = Dataset(data_folder, dset, split="train")
-    # val_dataset = Dataset(data_folder, dset, split="validation")
-    # test_dataset = Dataset(data_folder, dset, split="test")
+    val_dataset = Dataset(data_folder, dset, split="validation")
+    test_dataset = Dataset(data_folder, dset, split="test")
 
     train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=custom_collate_fn, drop_last=True)
-    # val_dataloader = DataLoader(val_dataset, batch_size=16, collate_fn=custom_collate_fn, drop_last=True)
-    # test_dataloader = DataLoader(test_dataset, batch_size=16, collate_fn=custom_collate_fn, drop_last=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=16, collate_fn=custom_collate_fn, drop_last=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=16, collate_fn=custom_collate_fn, drop_last=True)
 
     print("Dataloaders successfully instantiated !")
     
-    # print(train_dataloader.dataset.shape) # = 703
+    print("\n=======\nTrain DataLoader: \n\t")
     for x in train_dataloader:
+        print(type(x))
+        print(x)
+        break
+    print("\n=======\nValidation DataLoader: \n\t")
+    for x in val_dataloader:
+        print(type(x))
+        print(x)
+        break
+    print("\n=======\nTest DataLoader: \n\t")
+    for x in test_dataloader:
         print(type(x))
         print(x)
         break
