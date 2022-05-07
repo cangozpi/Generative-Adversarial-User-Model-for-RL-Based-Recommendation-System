@@ -28,9 +28,10 @@ Implementation of the paper ["Generative Adversarial User Model  for RL Based re
 
 
 ## __To Run:__
-1. Running steps are yet to come
+1. Prepare the dataset
     ```
-    $ 
+    $ cd dropbox
+    $ ./process_data.sh
     ```
 
 ---
@@ -68,5 +69,11 @@ Implementation of the paper ["Generative Adversarial User Model  for RL Based re
 * __config.yaml__: 
 
     Entails Hyperparameters of the model.
+
+* __dropbox/__ -->
+
+    * __process_data.sh__:         
+
+        Calls _process_data.py_ and outputs datasets in pickle format.
 
 ---

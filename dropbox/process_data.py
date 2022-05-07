@@ -3,6 +3,12 @@ import pickle
 import pandas as pd
 import argparse
 
+#======================================================================================================
+### Explanation of the original .txt file: The column 'session_new_index' corresponds to user ID. 
+# The column 'item_new_index' corresponds to item ID. If several items have the same 'Time' index, 
+# then they are displayed at the same time (in the same display set).
+#======================================================================================================
+
 cmd_opt = argparse.ArgumentParser(description='Argparser for data process')
 cmd_opt.add_argument('-dataset', type=str, default=None, help='choose rsc, tb, or yelp')
 cmd_args = cmd_opt.parse_args()
@@ -61,7 +67,7 @@ for user in range(size_user):
         data_behavior[user][1].append(list(display_set['item_new_index']))
         data_behavior[user][2].append(int(display_set[display_set.is_click==1]['item_new_index']))
 
-new_features = np.eye(size_item)
+new_features = np.eye(size_item) # one hot encoding of unique items
 
 filename = './'+cmd_args.dataset+'.pkl'
 file = open(filename, 'wb')
