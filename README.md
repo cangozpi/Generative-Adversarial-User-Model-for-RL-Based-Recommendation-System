@@ -66,6 +66,10 @@ Implementation of the paper ["Generative Adversarial User Model  for RL Based re
 
         Implements the GAN model using the Generator & the Discriminator models that are implemented in _generator.py_ and _discriminator.py_.
 
+    * __historyLSTM.py__:
+
+        Impelements LSTM model for encoding state (history) given the past state and new action to take. In other words, generates vector representation for state given old state and new action. Output of this model (state) is fed into Generator_UserModel. 
+
 * __config.yaml__: 
 
     Entails Hyperparameters of the model.
