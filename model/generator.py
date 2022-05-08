@@ -5,6 +5,10 @@ from torch import nn
 class Generator_UserModel(nn.Module):
     def __init__(self):
         super().__init__()
+        layers = [
+            #TODO: fill the model
+        ]
+        self.model = torch.nn.Sequential(*layers)
         pass
 
     def forward(self, state, displayed_items):
