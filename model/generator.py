@@ -33,7 +33,7 @@ class Generator_UserModel(nn.Module):
         batch_size = state.shape[0]
         # concat zero vector to displayed items to represent user not clicking on any of the displayed items
         not_clicking_feature_vec = torch.zeros((1, displayed_items.shape[-1])) # --> [1, feature_dims]
-        torch.cat((displayed_items, not_clicking_feature_vec), -1) # --> [batch_size (#users), (num_displayed_items+1), feature_dims]
+        displayed_items = torch.cat((displayed_items, not_clicking_feature_vec), -1) # --> [batch_size (#users), (num_displayed_items+1), feature_dims]
         displayed_items_squeezed = displayed_items.view(batch_size, -1) # --> [batch_size (#users), (num_displayed_items+1)*feature_dims]
         input_features = torch.cat((displayed_items_squeezed, state), dim=-1) # --> [batch_size (#users), (num_displayed_items*feature_dims) + state_dim]
         
