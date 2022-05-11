@@ -20,10 +20,10 @@ class History_LSTM(nn.Module):
         """
         Inputs:
             new_action (torch.Tensor): action chosen by the user (either ground truth action or Generator_UserModel generated action).
-            [batch_size (#users), feature_dims]
+            [batch_size (#users), num_time_steps, feature_dim]
         Returns:
             new_state (torch.Tensor): old_state updated after taking new_action (i.e. updated history representation). 
-            [batch_size (#users), state_dim] 
+            [batch_size (#users), num_time_steps, state_dim] 
             Note that the returned new_state tensor is of same shape as the old_state tensor. 
         """
         out, _ = self.lstm_model(actions, (self.h0, self.c0))
