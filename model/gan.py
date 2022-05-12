@@ -150,4 +150,5 @@ class GAN():
 ## ========================================================== DEBUG 
 if __name__ == "__main__":
     gan = GAN() #TODO: pass in constructor parameters
-    gan.gan_training_loop()
+    gan.gan_training_loop(train_loader, validation_loader)
+    # gan.test() #TODO

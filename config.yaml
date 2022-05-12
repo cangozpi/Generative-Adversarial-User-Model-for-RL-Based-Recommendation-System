@@ -1,0 +1,42 @@
+
+history_input_size: 804
+history_hidden_size: 512
+history_num_layers: 8
+
+generator_input_size: 7748
+generator_output_size: 9
+generator_n_hidden: 8
+generator_hidden_dim: 512 
+
+discriminator_input_size: 7748 
+discriminator_output_size: 9
+discriminator_n_hidden: 8
+discriminator_hidden_dim: 512
+
+lr: 0.0006
+betas: [0.3,0.999]
+epochs: 150
+
+
+
+# == Parameters of the History_LSTM:
+#             history_input_size (int): feature_dim of the actions.
+#             history_hidden_size (int): dimension of the state representation vector (dim of output of the History_LSTM)
+#             history_num_layers (int): number of recurrent layers in the History_LSTM.
+
+#         == Parameters of the Generator_UserModel:
+#             generator_input_size (int): equals ((num_displayed_items+1)*feature_dims + state_dim)
+#             generator_output_size (int): equals (num_displayed_items+1)
+#             generator_n_hidden (int): number of hidden layers in the generator model.
+#             generator_hidden_dim (int): hidden dimension of the layers in the generator model.
+
+#         == Parameters of teh Discriminator_RewardModel:
+#             discriminator_input_size (int): should equal (num_displayed_items*feature_dims) + state_dim.
+#             discriminator_output_size (int): should equal (num_displayed_items+1). 
+#             discriminator_n_hidden (int): number of hidden layers of the Discriminator model's MLP.
+#             discriminator_hidden_dim (int): hidden dimension of the layers of the Discriminator model's MLP.
+        
+#         == Hyperparameters of the training
+#             lr (int): learning rate used by the optimizer.
+#             betas (tuple): beta values used by the ADAM optimizer.
+#             epochs (int): number of epochs to train. //
