@@ -5,9 +5,9 @@ Implementation of the paper ["Generative Adversarial User Model  for RL Based re
 
 ## __TODOs__:
 * Create Pytorch <u>_Dataloaders_ for the datasets</u> :heavy_check_mark:
-* Implement <u>_GAN model_ using pytorch</u>
-* Create <u>_Training & Validation & Evaluation Loops_</u>
-* Implement _main.py_ to instantiate training of the model according to the passed in command line arguments and the _config.yaml_.
+* Implement <u>_GAN model_ using pytorch</u> :heavy_check_mark:
+* Create <u>_Training & Validation & Evaluation Loops_</u> :heavy_check_mark:
+* Implement _main.py_ to instantiate training of the model according to the passed in command line arguments and the _config.yaml_. :heavy_check_mark:
 * First <u>_Training_</u> of the model
 * <u>_Replicate Baseline_</u> Results in the paper
 * Perform <u>_Hyperparameter search_</u>
