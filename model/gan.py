@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 # import custom models
 from historyLSTM import History_LSTM
 from generator import Generator_UserModel
@@ -34,19 +33,16 @@ class GAN():
         iteration = 1
         epochs = 150 
 
-        # Initialize empty lists to hold d_fake, d_real and
-        # the generator losses
-        """ YOUR CODE HERE """
+        # Initialize empty lists to hold the generator and discriminator losses
         dfake_losses = []
         dreal_losses = []
-        generator_losses = []
 
 
         for epoch in range(epochs): 
             for real_click_history, display_set, clicked_items  in train_loader:
                 # real_click_history --> [batch_size (#users), num_time_steps, feature_dim]
                 # display_set --> [batch_size (#users), num_time_steps, num_displayed_item, feature_dim]
-                # clicked_items --> [batch_size (#users), num_time_steps] display set index of the clicked item
+                # clicked_items --> [batch_size (#users), num_time_steps] display set index of the clicked items by the real user (gt user actions)
                 
                 real_click_history = real_click_history.to(self.device)
                 display_set = display_set.to(self.device)
@@ -61,8 +57,9 @@ class GAN():
                 # sum the two losses
                 # call backward and take optimizer step
 
+
+
                 # ========== discriminator_RewardModel Loss Calculation below:
-                discriminator_optimizer.zero_grad()
 
                 # Obtain state representations given the real user's past click history
                 real_states = self.history_LSTM(real_click_history) # --> [batch_size (#users), num_time_steps, state_dim]
@@ -77,63 +74,45 @@ class GAN():
 
 
                 # ========== generator_UserModel Loss Calculation below: 
-                # Obtain generated user actions for 1 time step ahead given the past real users state representation
-                generated_actions = self.generator_UserModel.generate_actions(real_states, display_set) # --> [batch_size (#users), num_time_steps]
-                # Extract generated user actions feature vectors from the obtained displayed_item indices at the corresponding time steps
-                
-                for i, action in enumerate(generated_actions[:,]):  # [batch_sizes,num_time_step,feature_dim]
-                    
-
-                       
-                
-
-                    #TODO prepare generated action sequences:
-                    generated_data = []
-
-                    fake_states = self.History_LSTM(generated_data)
-
-                    dfake_out = self.discriminator_RewardModel.get_index(fake_images) 
-
-                    dfake_loss = 0.5 * torch.mean((dfake_out)**2)
-
+                # Obtain generated user action's indices/feature vectors for 1 time step ahead given the past real users state representation
+                generated_action_indices , generated_action_vectors = self.generator_UserModel.generate_actions(real_states, display_set)  #[batch_size (#users), num_time_steps, (num_displayed_items+1)] , [batch_size (#users), num_time_steps, feature_dims]
+                # Obtain new state representations after taking the generated actions
+                fake_states = self.history_LSTM(generated_action_vectors)
+                dfake_reward = self.discriminator_RewardModel.forward(fake_states, display_set) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)]
+                # Calculate the rewards for the generated user actions by masking by the generated rewards for all of the possible acitons in the display_set
+                clicked_item_mask = torch.nn.functional.one_hot(generated_action_indices, num_classes= ((generated_action_indices.shape[1])+1)).squeeze(-2) # --> [batch_size (#users), num_time_steps]
+                gen_reward = dfake_reward * clicked_item_mask
+                dfake_loss = torch.sum(gen_reward) # total loss/rewards for the real user actions (gt)
 
 
 
                 # ============ Total loss backpropagation:
-                d_loss = dreal_loss + dfake_loss
-                d_loss.backward()
+                combined_loss = dfake_loss - dreal_loss
+
+                # Backprop discriminator_RewardModel
+                # Note that discriminator_RewardModel tries to minimize the combined_loss
+                discriminator_optimizer.zero_grad()
+                combined_loss.backward()
                 discriminator_optimizer.step()
 
-                # Updating the generator, here is a pseudocode 
-                # call zero grad
-                # create 32x100 noise vector
-                # generate fake samples
-                # pass the fake images through D
-                # calculate generator loss
-                # call backward and take optimizer step
+                # backprop generator_UserModel
+                # Note that generator_UserModel tries to maximize the combined_loss
                 generator_optimizer.zero_grad()
-                z = torch.distributions.Normal(torch.tensor(0.), torch.tensor(1.)).sample([32,100]).to(self.device)
-                
-                fake_images = self.generator_UserModel.forward(z)
-                dfake_out = self.discriminator_RewardModel.forward(fake_images)
-
-                g_loss = torch.mean((dfake_out - 1)**2)
-
-                g_loss.backward()
-
+                combined_loss *= -1
+                combined_loss.backward()
                 generator_optimizer.step()
 
+                # logging
                 if iteration % 200 == 0:
-                    # Append losses to you lists (d_real, d_fake, g_loss)
+                    # Append losses to you lists (d_real, d_fake)
                     # You may also wish to print them here for logging purposes
                     dreal_losses.append(dreal_loss.detach().cpu().numpy())
                     dfake_losses.append(dfake_loss.detach().cpu().numpy())
-                    generator_losses.append(g_loss.detach().cpu().numpy())
 
                 iteration += 1
 
-        # Return the loss lists
-        return dreal_losses, dfake_losses, generator_losses
+        # Return the losses
+        return dreal_losses, dfake_losses
 
 
     def test(self):

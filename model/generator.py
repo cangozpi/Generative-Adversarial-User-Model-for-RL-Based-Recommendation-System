@@ -102,7 +102,7 @@ class Generator_UserModel(nn.Module):
         # Obtain action feature vectors corresponding to the indices of the generated actions
         generated_action_vectors = self.get_corresponding_feature_vec(self, generated_action_indices, displayed_items) # --> [batch_size (#users), num_time_steps, feature_dims]
 
-        return generated_action_vectors # --> [batch_size (#users), num_time_steps, feature_dims]
+        return generated_action_indices , generated_action_vectors #[batch_size (#users), num_time_steps, (num_displayed_items+1)] , [batch_size (#users), num_time_steps, feature_dims]
         
         
         
