@@ -77,8 +77,9 @@ class GAN():
 
 
                 # ========== generator_UserModel Loss Calculation below: 
-                # Obtain state representations given the real user's past click history
-                generated_actions = self.generator_UserModel(real_states) # --> [batch_size (#users), num_displayed_items]
+                # Obtain generated user actions for 1 time step ahead given the past real users state representation
+                generated_actions = self.generator_UserModel.generate_actions(real_states, display_set) # --> [batch_size (#users), num_time_steps]
+                # Extract generated user actions feature vectors from the obtained displayed_item indices at the corresponding time steps
                 
                 for i, action in enumerate(generated_actions[:,]):  # [batch_sizes,num_time_step,feature_dim]
                     
@@ -91,7 +92,7 @@ class GAN():
 
                     fake_states = self.History_LSTM(generated_data)
 
-                    dfake_out = self.discriminator_RewardModel.get_index(fake_images)
+                    dfake_out = self.discriminator_RewardModel.get_index(fake_images) 
 
                     dfake_loss = 0.5 * torch.mean((dfake_out)**2)
 

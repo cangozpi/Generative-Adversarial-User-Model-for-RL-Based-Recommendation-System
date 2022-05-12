@@ -54,6 +54,7 @@ class Generator_UserModel(nn.Module):
             displayed_items (torch.Tensor): [batch_size (#users), num_time_steps, num_displayed_items, feature_dims]
         Return:
             generated_action_indices (torch.Tensor): [batch_size (#users), num_time_steps] indices of the actions chosen from the displayed_items by the user model
+            # Note that (num_displayed_items+1)^th index refers to the user not clickin on any of the items (i.e. zero feature vector)
         """
         out = self.forward(state, displayed_items) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)]
         # find the action with the highest probability
@@ -61,6 +62,47 @@ class Generator_UserModel(nn.Module):
         generated_action_indices = torch.argmax(pred_probs, dim=2) # --> [batch_size (#users), num_time_steps]
         
         return generated_action_indices
+
+    def get_corresponding_feature_vec(self, generated_action_indices, displayed_items):
+        """
+        Input:
+            generated_action_indices (torch.Tensor): [batch_size (#users), num_time_steps] indices of the actions chosen from the displayed_items by the user model
+            # ! Note that (num_displayed_items+1)^th index refers to the user not clickin on any of the items (i.e. zero feature vector) !
+            displayed_items (torch.Tensor): [batch_size (#users), num_time_steps, num_displayed_items, feature_dims]
+        Return:
+            generated_action_vectors (torch.Tensor): corresponding feature vectors of the generated actions specified with the generated_action_indices 
+                [batch_size (#users), num_time_steps, feature_dims]
+        """
+        # Handle (num_displayed_items+1)^th index which refers to the user not clickin on any of the items (i.e. zero feature vector)
+        not_clicking_feature_vec = torch.zeros((1, displayed_items.shape[-1])) # --> [1, feature_dims]
+        displayed_items = torch.cat((displayed_items, not_clicking_feature_vec), -2) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1), feature_dims]
+
+        # Extract the feature vectors that correspond to the generated action indices
+        #TODO implement this faster
+        generated_action_vectors = torch.zeros((generated_action_indices.shape[0], generated_action_indices.shape[1], displayed_items.shape[-1])) # --> [batch_size (#users), num_time_steps, feature_dims]
+        for b in range(generated_action_indices.shape[0]): # batch index
+            for t in range(generated_action_indices.shape[1]): # time step index
+                chosen_index = generated_action_indices[b, t]
+                generated_action_vectors[b, t, :] = displayed_items[b, t, chosen_index, :]
+
+        return generated_action_vectors # --> [batch_size (#users), num_time_steps, feature_dims]
+
+
+    def generate_actions(self, state, displayed_items):
+        """
+        Input:
+            state (torch.Tensor): [batch_size (#users), num_time_steps, state_dim]
+            displayed_items (torch.Tensor): [batch_size (#users), num_time_steps, num_displayed_items, feature_dims]
+        Return:
+            generated_action_vectors (torch.Tensor): corresponding feature vectors of the generated actions specified with the generated_action_indices 
+                [batch_size (#users), num_time_steps, feature_dims]
+        """
+        # Obtain indices of the actions chosen from the display set
+        generated_action_indices = self.get_index(state, displayed_items) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)]
+        # Obtain action feature vectors corresponding to the indices of the generated actions
+        generated_action_vectors = self.get_corresponding_feature_vec(self, generated_action_indices, displayed_items) # --> [batch_size (#users), num_time_steps, feature_dims]
+
+        return generated_action_vectors # --> [batch_size (#users), num_time_steps, feature_dims]
         
         
         
