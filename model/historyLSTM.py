@@ -5,11 +5,16 @@ from torch import nn
 # using LSTM(Long Short Term Memory)
 class History_LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers):
+        """
+        input_size (int): feature_dim of the actions.
+        hidden_size (int): dimension of the state representation vector (dim of output)
+        num_layers (int): number of recurrent layers in the LSTM model.
+        """
         super().__init__()
         self.device = "gpu" if torch.cuda.is_available() else "cpu"
         self.num_layers = num_layers
         self.state_dim = hidden_size
-        self.lstm_model = torch.nn.LSTM(input_size, self.state_dim, num_layers, batch_first=True).to(self.device)
+        self.lstm_model = torch.nn.LSTM(input_size, self.state_dim, self.num_layers, batch_first=True).to(self.device)
         
         # ınitialize hidden and cell state
         self.h0 = torch.zeros(self.num_layers, input_size.shape[0], self.state_dim).to(self.device)

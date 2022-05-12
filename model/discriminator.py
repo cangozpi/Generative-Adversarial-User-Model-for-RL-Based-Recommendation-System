@@ -4,6 +4,12 @@ from torch import nn
 # Note that Reward Generating model is the Discriminator in this context
 class Discriminator_RewardModel(nn.Module):
     def __init__(self, input_size, output_size, n_hidden, hidden_dim):
+        """
+        input_size: should equal (num_displayed_items*feature_dims) + state_dim.
+        output_size: should equal (num_displayed_items+1). 
+        n_hidden: number of hidden layers of the Discriminator model's MLP.
+        hidden_dim: hidden dimension of the layers of the Discriminator model's MLP.
+        """
         super().__init__()
         self.input_size = input_size
         layers = []
@@ -38,5 +44,5 @@ class Discriminator_RewardModel(nn.Module):
         displayed_items_flat = displayed_items.view(batch_size, -1) # --> [batch_size (#users), (num_displayed_items+1)*feature_dims]
         input_features = torch.cat((displayed_items_flat, state), dim=-1) # --> [batch_size (#users), (num_displayed_items*feature_dims) + state_dim]
         
-        return self.model(input_features)
+        return self.model(input_features) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)]
         

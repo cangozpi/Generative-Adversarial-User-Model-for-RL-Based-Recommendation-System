@@ -7,6 +7,8 @@ class Generator_UserModel(nn.Module):
         """
         input_size: equals ((num_displayed_items+1)*feature_dims + state_dim)
         output_size: equals (num_displayed_items+1)
+        n_hidden: number of hidden layers in the generator model.
+        hidden_dim: hidden dimension of the layers in the generator model.
         """
         
         super().__init__()

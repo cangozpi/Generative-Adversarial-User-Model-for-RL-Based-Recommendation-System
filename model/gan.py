@@ -6,12 +6,41 @@ from discriminator import Discriminator_RewardModel
 
 # Note that GAN is a model which orchestrated the mini-max game (training) between the  discriminator and the  generator model.
 class GAN():
-    def __init__(self):        
-        self.history_LSTM = History_LSTM() #TODO: pass constructor parameters when the model
-        self.generator_UserModel = Generator_UserModel() #TODO: pass constructor parameters when the model
-        self.discriminator_RewardModel = Discriminator_RewardModel() #TODO: pass constructor parameters when the model
+    def __init__(self, history_input_size, history_hidden_size, history_num_layers, \
+        generator_input_size, generator_output_size, generator_n_hidden, generator_hidden_dim, \
+            discriminator_input_size, discriminator_output_size, discriminator_n_hidden, discriminator_hidden_dim, \
+                lr=0.0006, betas=[0.3,0.999], epochs=150):        
+        """
+        == Parameters of the History_LSTM:
+            history_input_size (int): feature_dim of the actions.
+            history_hidden_size (int): dimension of the state representation vector (dim of output of the History_LSTM)
+            history_num_layers (int): number of recurrent layers in the History_LSTM.
+
+        == Parameters of the Generator_UserModel:
+            generator_input_size (int): equals ((num_displayed_items+1)*feature_dims + state_dim)
+            generator_output_size (int): equals (num_displayed_items+1)
+            generator_n_hidden (int): number of hidden layers in the generator model.
+            generator_hidden_dim (int): hidden dimension of the layers in the generator model.
+
+        == Parameters of teh Discriminator_RewardModel:
+            discriminator_input_size (int): should equal (num_displayed_items*feature_dims) + state_dim.
+            discriminator_output_size (int): should equal (num_displayed_items+1). 
+            discriminator_n_hidden (int): number of hidden layers of the Discriminator model's MLP.
+            discriminator_hidden_dim (int): hidden dimension of the layers of the Discriminator model's MLP.
+        
+        == Hyperparameters of the training
+            lr (int): learning rate used by the optimizer.
+            betas (tuple): beta values used by the ADAM optimizer.
+            epochs (int): number of epochs to train.
+        """
         self.device = "gpu" if torch.cuda.is_available() else "cpu"
-        pass
+        self.history_LSTM = History_LSTM(history_input_size, history_hidden_size, history_num_layers).to(self.device)
+        self.generator_UserModel = Generator_UserModel(generator_input_size, generator_output_size, generator_n_hidden, generator_hidden_dim).to(self.device)
+        self.discriminator_RewardModel = Discriminator_RewardModel(discriminator_input_size, discriminator_output_size, discriminator_n_hidden, discriminator_hidden_dim).to(self.device)
+        self.lr = lr
+        self.betas = betas
+        self.epochs = epochs
+        
 
     
     def gan_training_loop(self, train_loader, validation_loader):
@@ -24,21 +53,18 @@ class GAN():
             UserModel_rewards (torch.tensor): Reward values for the generator_UserModel generated actions.
             ground_truth_rewards (torch.tensor): Reward values for the ground truth actions.
         """
-    
+        #TODO implement validation
 
-        discriminator_optimizer = torch.nn.optim.Adam(self.discriminator_RewardModel.parameters(), lr=0.0006,betas=[0.3,0.999])
-        generator_optimizer = torch.nn.optim.Adam(self.generator_UserModel.parameters(), lr=0.0003,betas=[0.3,0.999])
+        discriminator_optimizer = torch.nn.optim.Adam(self.discriminator_RewardModel.parameters(), lr=self.lr, betas=self.betas)
+        generator_optimizer = torch.nn.optim.Adam(self.generator_UserModel.parameters(), lr=self.lr, betas=self.betas)
 
-        
-        iteration = 1
-        epochs = 150 
 
         # Initialize empty lists to hold the generator and discriminator losses
         dfake_losses = []
         dreal_losses = []
 
-
-        for epoch in range(epochs): 
+        iteration = 1
+        for epoch in range(self.epochs): 
             for real_click_history, display_set, clicked_items  in train_loader:
                 # real_click_history --> [batch_size (#users), num_time_steps, feature_dim]
                 # display_set --> [batch_size (#users), num_time_steps, num_displayed_item, feature_dim]
