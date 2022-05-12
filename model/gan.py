@@ -1,8 +1,8 @@
 import torch
 # import custom models
-from historyLSTM import History_LSTM
-from generator import Generator_UserModel
-from discriminator import Discriminator_RewardModel
+from model.historyLSTM import History_LSTM
+from model.generator import Generator_UserModel
+from model.discriminator import Discriminator_RewardModel
 
 # Note that GAN is a model which orchestrated the mini-max game (training) between the  discriminator and the  generator model.
 class GAN():
@@ -55,8 +55,8 @@ class GAN():
         """
         #TODO implement validation
 
-        discriminator_optimizer = torch.nn.optim.Adam(self.discriminator_RewardModel.parameters(), lr=self.lr, betas=self.betas)
-        generator_optimizer = torch.nn.optim.Adam(self.generator_UserModel.parameters(), lr=self.lr, betas=self.betas)
+        discriminator_optimizer = torch.optim.Adam(self.discriminator_RewardModel.parameters(), lr=self.lr, betas=self.betas)
+        generator_optimizer = torch.optim.Adam(self.generator_UserModel.parameters(), lr=self.lr, betas=self.betas)
 
 
         # Initialize empty lists to hold the generator and discriminator losses

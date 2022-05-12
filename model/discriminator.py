@@ -22,7 +22,7 @@ class Discriminator_RewardModel(nn.Module):
             
         # Regression Layer (outputs score for each display_item)
         # Note thta output_dim equals the number of possible actions
-        layers.extend[[torch.nn.Linear(hidden_dim, output_size), torch.nn.Tanh()]]
+        layers.extend([torch.nn.Linear(hidden_dim, output_size), torch.nn.Tanh()])
          
         self.model = torch.nn.Sequential(*layers) # (inp_0 inp_1 .. inp_k) --> classification(inp_0, inp_1, .. inp_k) 
 

@@ -17,8 +17,8 @@ class History_LSTM(nn.Module):
         self.lstm_model = torch.nn.LSTM(input_size, self.state_dim, self.num_layers, batch_first=True).to(self.device)
         
         # ınitialize hidden and cell state
-        self.h0 = torch.zeros(self.num_layers, input_size.shape[0], self.state_dim).to(self.device)
-        self.c0= torch.zeros(self.num_layers, input_size.shape[0], self.state_dim).to(self.device)
+        self.h0 = torch.zeros(self.num_layers, input_size, self.state_dim).to(self.device)
+        self.c0= torch.zeros(self.num_layers, input_size, self.state_dim).to(self.device)
 
 
     def forward(self, actions):

@@ -22,7 +22,7 @@ class Generator_UserModel(nn.Module):
             
             
         # Classification Layer (outputs score for each display_item)
-        layers.extend[[torch.nn.Linear(hidden_dim, output_size), torch.nn.Tanh()]]
+        layers.extend([torch.nn.Linear(hidden_dim, output_size), torch.nn.Tanh()])
          
         self.model = torch.nn.Sequential(*layers) # (inp_0 inp_1 .. inp_k) --> classification(inp_0, inp_1, .. inp_k) 
                                                 
