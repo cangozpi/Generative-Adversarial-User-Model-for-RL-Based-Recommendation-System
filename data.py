@@ -99,20 +99,63 @@ class Dataset(nn.Module):
 
 def custom_collate_fn(data):
     """
-        Used to create batches with variable sequence lengths. Output will be fed into LSTM layer.
+        Used to create batches with variable sequence lengths. Output will be compatible with LSTMs.
         --
-        Inputs: list(tuple of (vector, vector_length))
-            vector: list of feature vectors of the picked items at every time. Has shape = [num_time_steps, feature_dim]
-            vector_length: length of the sequence (i.e. how many feature vectors are present)   
-            
-        # New Inputs: tuple of lists (i.e. (list, list, list, list))
+        Inputs: tuple of lists (i.e. (list, list, list, list))
             # clicked_items --> [num_time_steps] display set index of the clicked items by the real user (gt user actions)
             # real_click_history --> [num_time_steps, feature_dim]
             # real_click_history_length --> [num_time_steps]
-            # display_set --> [num_time_steps, num_displayed_item, feature_dim]             
+            # display_set --> [num_time_steps, num_displayed_item, feature_dim]    
+
+        Returns:  tuple of torch.tensor (i.e. (torch.tensor, torch.tensor, torch.tensor))
+            # batched_clicked_items --> [batch_size (#users), max(num_time_steps)] display set index of the clicked items by the real user (gt user actions)
+            # batched_real_click_history --> [batch_size (#users), max(num_time_steps), feature_dim]
+            # batched_display_set --> [batch_size (#users), max(num_time_steps), num_displayed_item, feature_dim]             
     """
-    # pack Sequences here for LSTM batches with padded dimensions
-    # Record the length of the every time_step
+    # Pack Sequences here for LSTM batches with padded dimensions
+        # Record the length of every time_step
+    lengths_list = []
+    for clicked_items, real_click_history, real_click_history_length, display_set in data:
+        lengths_list.append(real_click_history_length)
+    
+    # Longest time_step length. All of the sequences will be padded towards this value
+    max_length = max(lengths_list)
+    
+    # Create the padded vectors
+    batch_size = len(data)
+    feature_dim = len(data[0][1][0])
+    num_displayed_item = len(data[0][3][0])
+
+    # Create a batch from the inputted data
+    padded_clicked_items = torch.zeros(batch_size, max_length) # --> [batch_size, max(num_time_steps)]
+    padded_real_click_history = torch.zeros(batch_size, max_length, feature_dim) # --> [batch_size, max(num_time_steps), feature_dim]
+    padded_display_set = torch.zeros(batch_size, max_length, num_displayed_item, feature_dim) # --> [batch_size, max(num_time_steps), num_displayed_item, feature_dim]
+    for i, (clicked_items, real_click_history, real_click_history_length, display_set) in enumerate(data): # index on the batch
+        # ************************ Reminder
+        # clicked_items --> [num_time_steps] display set index of the clicked items by the real user (gt user actions)
+        # real_click_history --> [num_time_steps, feature_dim]
+        # real_click_history_length --> [num_time_steps]
+        # display_set --> [num_time_steps, num_displayed_item, feature_dim] 
+        # ************************
+        cur_clicked_items = torch.tensor(clicked_items) # --> [num_time_steps]
+        padded_clicked_items[i, real_click_history_length:] = cur_clicked_items
+
+        real_click_history = torch.tensor(real_click_history) # --> [num_time_steps, feature_dim]
+        padded_real_click_history[i, :real_click_history_length, :] = real_click_history
+
+        display_set = torch.tensor(display_set) # --> [num_time_steps, num_displayed_item, feature_dim]
+        padded_display_set[i, :real_click_history_length, :, :] = display_set
+
+    # Make padded tensors compatible with LSTMs
+    batched_clicked_items = torch.nn.utils.rnn.pack_padded_sequence(padded_clicked_items, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), num_time_steps]
+    batched_click_history = torch.nn.utils.rnn.pack_padded_sequence(padded_real_click_history, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), num_time_steps, feature_dim]
+    batched_display_set = torch.nn.utils.rnn.pack_padded_sequence(padded_display_set, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), num_time_steps, num_displayed_item, feature_dim]
+
+    return batched_clicked_items, batched_click_history, batched_display_set
+
+
+    # =============================== ERASE BELOW
+    # Record the length of every time_step
     lengths_list = []
     for cur_vector, cur_vector_length in data:
         lengths_list.append(cur_vector_length)
