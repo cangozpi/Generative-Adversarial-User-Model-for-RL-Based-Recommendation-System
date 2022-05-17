@@ -28,7 +28,8 @@ class History_LSTM(nn.Module):
             [batch_size (#users), num_time_steps, feature_dim]
         Returns:
             new_state (torch.Tensor): old_state updated after taking new_action (i.e. updated history representation). 
-            [batch_size (#users), num_time_steps, state_dim] 
+            [batch_size (#users), num_time_steps, state_dim]
+            (h, c) (tuple): hidden and cell states. 
             Note that the returned new_state tensor is of same shape as the old_state tensor. 
         """
         out, _ = self.lstm_model(actions, (self.h0, self.c0))

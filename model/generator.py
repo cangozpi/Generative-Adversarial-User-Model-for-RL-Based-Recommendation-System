@@ -96,15 +96,16 @@ class Generator_UserModel(nn.Module):
             state (torch.Tensor): [batch_size (#users), num_time_steps, state_dim]
             displayed_items (torch.Tensor): [batch_size (#users), num_time_steps, num_displayed_items, feature_dims]
         Return:
+            generated_action_indices (torch.Tensor): indices of the chosen actions. [batch_size (#users), num_time_steps, (num_displayed_items+1)]
             generated_action_vectors (torch.Tensor): corresponding feature vectors of the generated actions specified with the generated_action_indices 
                 [batch_size (#users), num_time_steps, feature_dims]
         """
         # Obtain indices of the actions chosen from the display set
-        generated_action_indices = self.get_index(state, displayed_items) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)]
+        generated_action_indices = self.get_index(state, displayed_items) # --> [batch_size (#users), num_time_steps]
         # Obtain action feature vectors corresponding to the indices of the generated actions
         generated_action_vectors = self.get_corresponding_feature_vec(self, generated_action_indices, displayed_items) # --> [batch_size (#users), num_time_steps, feature_dims]
 
-        return generated_action_indices , generated_action_vectors #[batch_size (#users), num_time_steps, (num_displayed_items+1)] , [batch_size (#users), num_time_steps, feature_dims]
+        return generated_action_indices , generated_action_vectors #[batch_size (#users), num_time_steps] , [batch_size (#users), num_time_steps, feature_dims]
         
         
         
