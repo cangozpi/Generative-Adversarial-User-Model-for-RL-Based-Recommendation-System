@@ -60,12 +60,32 @@ class Dataset(nn.Module):
             picked_item_features = [] # --> [num_time_steps, features]
             for picked_item_id in data_behavior[u][2]:
                 picked_item_features.append(item_features[picked_item_id])
-                self.picked_item_features_per_user.append(picked_item_features)
+            self.picked_item_features_per_user.append(picked_item_features)
 
             # create display_set history
-            self.display_set_features_per_user.append(data_behavior[u])
+            # convert displayed item indices to corresponding item features
+            displayed_item_features_per_time = [] # --> [num_time_steps, num_displayed_items, feature_dim]
+            print("looping a new user ===================")
+            for displayed_item_ids in data_behavior[u][1]: # index on time
+                # displayed_item_ids = [num_displayed_item]
+                cur_disp_features_list = [] # --> [num_displayed_items, feature_dim]
+                for id in displayed_item_ids: # index on ids in the given displayed_items
+                    # id = int
+                    feature_vec = item_features[id]
+                    cur_disp_features_list.append(feature_vec)
+                print(len(cur_disp_features_list), "display_set lenght at a given time")
+                displayed_item_features_per_time.append(cur_disp_features_list)
+            self.display_set_features_per_user.append(displayed_item_features_per_time)
 
-            
+                
+                # cur_disp_item_features_in_t = [] # --> [num_displayed_items, feature_dim]
+                # for disp_item_id_in_t in displayed_item_ids: # iterate through time
+                #     for id in disp_item_id_in_t: # iterate through displayed items at the given time
+                #         cur_disp_item_features_in_t.append(item_features[id])
+                #     displayed_item_features_per_time.append(cur_disp_item_features_in_t)
+                # self.display_set_features_per_user.append(displayed_item_features_per_time)
+
+        print(len(self.clicked_items_index_per_user) , "\t", len(self.picked_item_features_per_user), "\t", len(self.display_set_features_per_user))
         
         
 
@@ -122,6 +142,12 @@ def custom_collate_fn(data):
     max_length = max(lengths_list)
     
     # Create the padded vectors
+    # # 1 1 ? 3
+    # print(data[0][0], "clicked_items")
+    # print(data[0][1], "real_click_history")
+    # print(data[0][2], "real_click_hisotry_length")
+    # print(data[0][3], "display_set")
+    # print(f"{len(data[0][0])} \t {len(data[0][1])} \t {(data[0][2])} \t {len(data[0][3])}")
     batch_size = len(data)
     feature_dim = len(data[0][1][0])
     num_displayed_item = len(data[0][3][0])
@@ -138,13 +164,18 @@ def custom_collate_fn(data):
         # display_set --> [num_time_steps, num_displayed_item, feature_dim] 
         # ************************
         cur_clicked_items = torch.tensor(clicked_items) # --> [num_time_steps]
-        padded_clicked_items[i, real_click_history_length:] = cur_clicked_items
+        print(real_click_history_length, "\t ", cur_clicked_items.shape)
+        padded_clicked_items[i, :real_click_history_length] = cur_clicked_items
+        
+        cur_real_click_history = torch.tensor(real_click_history) # --> [num_time_steps, feature_dim]
+        print(real_click_history_length, "\t ", cur_real_click_history.shape)
+        padded_real_click_history[i, :real_click_history_length, :] = cur_real_click_history
 
-        real_click_history = torch.tensor(real_click_history) # --> [num_time_steps, feature_dim]
-        padded_real_click_history[i, :real_click_history_length, :] = real_click_history
+        cur_display_set = torch.tensor(display_set) # --> [num_time_steps, num_displayed_item, feature_dim]
+        print(real_click_history_length, "\t ", cur_display_set.shape)
+        print("LOOOO", " true num_displayed_item = ",len(data[0][3][0]), " cur_display_set.shape = ", cur_display_set.shape)
+        padded_display_set[i, :real_click_history_length, :, :] = cur_display_set
 
-        display_set = torch.tensor(display_set) # --> [num_time_steps, num_displayed_item, feature_dim]
-        padded_display_set[i, :real_click_history_length, :, :] = display_set
 
     # Make padded tensors compatible with LSTMs
     batched_clicked_items = torch.nn.utils.rnn.pack_padded_sequence(padded_clicked_items, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), num_time_steps]
@@ -152,29 +183,6 @@ def custom_collate_fn(data):
     batched_display_set = torch.nn.utils.rnn.pack_padded_sequence(padded_display_set, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), num_time_steps, num_displayed_item, feature_dim]
 
     return batched_clicked_items, batched_click_history, batched_display_set
-
-
-    # =============================== ERASE BELOW
-    # Record the length of every time_step
-    lengths_list = []
-    for cur_vector, cur_vector_length in data:
-        lengths_list.append(cur_vector_length)
-
-    # longest time_step length. All of the sequences will be padded towards this value
-    max_length = max(lengths_list)
-    
-    # Create the padded vectors
-    batch_size = len(data)
-    feature_dim = len(data[0][0][0])
-    
-    padded_vectors = torch.zeros(batch_size, max_length, feature_dim) # --> [batch_size, max(num_time_steps), feature_dim]
-    for i, (cur_vector, cur_vector_length) in enumerate(data):
-        cur_vector = torch.tensor(cur_vector[0])
-        padded_vectors[i, :cur_vector_length] = cur_vector
-
-    
-    return torch.nn.utils.rnn.pack_padded_sequence(padded_vectors, lengths_list, batch_first=True, enforce_sorted = False) 
-    
 
 
 # ==============================================================
