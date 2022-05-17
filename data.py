@@ -39,10 +39,11 @@ class Dataset(nn.Module):
 
         num_items = len(item_features[0])
 
-        self.picked_item_features_per_user = [] # --> [user, num_time_steps, picked_item_features]
+        self.clicked_items_index_per_user = [] # --> [user, num_time_steps]
+        self.picked_item_features_per_user = [] # --> [user, num_time_steps, feature_dim]
+        self.display_set_features_per_user = [] # --> [user, num_time_steps, num_displayed_items, feature_dim]
         
         users = []
-
         if split == "train":
             users = train_users
             
@@ -52,11 +53,19 @@ class Dataset(nn.Module):
             users = test_users
 
         for u in users:
-            picked_item_features = [] # --> [time,features]
+            # create clicked item history in terms of its index in the display_set
+            self.clicked_items_index_per_user.append(data_behavior[u][2])
+            
+            # create clicked item (real user click) history in terms of its feature representation (dim = feature_dim)
+            picked_item_features = [] # --> [num_time_steps, features]
             for picked_item_id in data_behavior[u][2]:
                 picked_item_features.append(item_features[picked_item_id])
-           
-            self.picked_item_features_per_user.append(picked_item_features)
+                self.picked_item_features_per_user.append(picked_item_features)
+
+            # create display_set history
+            self.display_set_features_per_user.append(data_behavior[u])
+
+            
         
         
 
@@ -64,15 +73,23 @@ class Dataset(nn.Module):
 
     def __getitem__(self, index):
         """
-        Returns: tuple of (vector, vector_length)
-            vector: list of feature vectors of the picked items at every time. Has shape = [num_time_steps, feature_dim]
-            vector_length: length of the sequence (i.e. how many feature vectors are present)
+        Returns: tuple of lists (i.e. (list, list, list, list))
+            # clicked_items --> [num_time_steps] display set index of the clicked items by the real user (gt user actions)
+            # real_click_history --> [num_time_steps, feature_dim]
+            # real_click_history_length --> [num_time_steps]
+            # display_set --> [num_time_steps, num_displayed_item, feature_dim]
          
         """
-        list_of_picked_item_features = self.picked_item_features_per_user[index] # --> [num_time_steps, picked_item_features]
-        vector_length = len(list_of_picked_item_features) 
+        # Note that we index on users
+        clicked_items = self.clicked_items_index_per_user[index]
 
-        return list_of_picked_item_features, vector_length
+        real_click_history = self.picked_item_features_per_user[index] # --> [num_time_steps, picked_item_features]
+        real_click_history_length = len(real_click_history) 
+        
+        display_set = self.display_set_features_per_user[index]
+
+
+        return clicked_items, real_click_history, real_click_history_length, display_set  
 
 
     def __len__(self):
@@ -86,7 +103,13 @@ def custom_collate_fn(data):
         --
         Inputs: list(tuple of (vector, vector_length))
             vector: list of feature vectors of the picked items at every time. Has shape = [num_time_steps, feature_dim]
-            vector_length: length of the sequence (i.e. how many feature vectors are present)                
+            vector_length: length of the sequence (i.e. how many feature vectors are present)   
+            
+        # New Inputs: tuple of lists (i.e. (list, list, list, list))
+            # clicked_items --> [num_time_steps] display set index of the clicked items by the real user (gt user actions)
+            # real_click_history --> [num_time_steps, feature_dim]
+            # real_click_history_length --> [num_time_steps]
+            # display_set --> [num_time_steps, num_displayed_item, feature_dim]             
     """
     # pack Sequences here for LSTM batches with padded dimensions
     # Record the length of the every time_step
