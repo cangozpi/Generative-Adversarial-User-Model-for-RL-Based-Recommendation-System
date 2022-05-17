@@ -31,18 +31,19 @@ class Discriminator_RewardModel(nn.Module):
         Inputs:
             Input:
                 state (torch.Tensor): [batch_size (#users), num_time_steps, state_dim]
-                displayed_items (torch.Tensor): [batch_size (#users), num_time_steps, num_displayed_items, feature_dims]
+                displayed_items (torch.Tensor): [batch_size (#users), max(num_time_steps), num_displayed_item, feature_dim]
             Returns:
                 reward (torch.float): reward value for taking the action at the given state. 
                 [batch_size (#users), num_time_steps, (num_displayed_items+1)]
         """
         # Prepare input
-        batch_size = state.shape[0]
+        batch_size = state.shape[0] # B
+        num_time_steps = displayed_items.shape[1] # L
         # concat zero vector to displayed items to represent user not clicking on any of the displayed items
-        not_clicking_feature_vec = torch.zeros((1, displayed_items.shape[-1])) # --> [1, feature_dims]
-        displayed_items = torch.cat((displayed_items, not_clicking_feature_vec), -1) # --> [batch_size (#users), (num_displayed_items+1), feature_dims]
-        displayed_items_flat = displayed_items.view(batch_size, -1) # --> [batch_size (#users), (num_displayed_items+1)*feature_dims]
-        input_features = torch.cat((displayed_items_flat, state), dim=-1) # --> [batch_size (#users), (num_displayed_items*feature_dims) + state_dim]
+        not_clicking_feature_vec = torch.zeros((batch_size, num_time_steps, 1, displayed_items.shape[-1])) # --> [batch_size (#users), max(num_time_steps), 1, feature_dim]
+        displayed_items = torch.cat((displayed_items, not_clicking_feature_vec), -2) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1), feature_dims]
+        displayed_items_flat = displayed_items.view(batch_size, num_time_steps, -1) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)*feature_dims]
+        input_features = torch.cat((displayed_items_flat, state), dim=-1) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items*feature_dims) + state_dim]
         
-        return self.model(input_features) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)]
+        return self.model(input_features) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
         

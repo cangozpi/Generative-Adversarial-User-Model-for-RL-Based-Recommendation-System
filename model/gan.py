@@ -66,9 +66,9 @@ class GAN():
         iteration = 1
         for epoch in range(self.epochs): 
             for real_click_history, display_set, clicked_items  in train_loader:
-                # real_click_history --> [batch_size (#users), num_time_steps, feature_dim]
-                # display_set --> [batch_size (#users), num_time_steps, num_displayed_item, feature_dim]
-                # clicked_items --> [batch_size (#users), num_time_steps] display set index of the clicked items by the real user (gt user actions)
+                # real_click_history --> [batch_size (#users), max(num_time_steps), feature_dim]
+                # display_set --> [batch_size (#users), max(num_time_steps), num_displayed_item, feature_dim]
+                # clicked_items --> [batch_size (#users), max(num_time_steps)] display set index of the clicked items by the real user (gt user actions)
                 
                 real_click_history = real_click_history.to(self.device)
                 display_set = display_set.to(self.device)
@@ -90,10 +90,10 @@ class GAN():
                 # Obtain state representations given the real user's past click history
                 real_states = self.history_LSTM(real_click_history) # --> [batch_size (#users), num_time_steps, state_dim]
                 # Calculate the rewards for all of the possible actions (items in the (display_set+1))
-                dreal_reward = self.discriminator_RewardModel.forward(real_states, display_set) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)]
+                dreal_reward = self.discriminator_RewardModel.forward(real_states, display_set) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                 
                 # Calculate the rewards for the real user actions by masking by the actions taken by the real user
-                clicked_item_mask = torch.nn.functional.one_hot(clicked_items, num_classes= ((clicked_items.shape[1])+1)).squeeze(-2) # --> [batch_size (#users), num_time_steps]
+                clicked_item_mask = torch.nn.functional.one_hot(clicked_items, num_classes= ((clicked_items.shape[1])+1)) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                 gt_reward = dreal_reward * clicked_item_mask
                 dreal_loss = torch.sum(gt_reward) # total loss/rewards for the real user actions (gt)
 
