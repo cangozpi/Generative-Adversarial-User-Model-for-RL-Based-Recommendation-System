@@ -6,6 +6,7 @@ import pickle
 import datetime
 import itertools
 import os
+from copy import deepcopy
 
 class Dataset(nn.Module):
     def __init__(self, data_folder, dset, split="train"):
@@ -52,6 +53,7 @@ class Dataset(nn.Module):
         else: # test split
             users = test_users
 
+        max_display_set_features_length = 0 # will be used to pad display_set_features length to this value to have a tensor
         for u in users:
             # create clicked item history in terms of its index in the display_set
             self.clicked_items_index_per_user.append(data_behavior[u][2])
@@ -65,7 +67,6 @@ class Dataset(nn.Module):
             # create display_set history
             # convert displayed item indices to corresponding item features
             displayed_item_features_per_time = [] # --> [num_time_steps, num_displayed_items, feature_dim]
-            print("looping a new user ===================")
             for displayed_item_ids in data_behavior[u][1]: # index on time
                 # displayed_item_ids = [num_displayed_item]
                 cur_disp_features_list = [] # --> [num_displayed_items, feature_dim]
@@ -73,18 +74,23 @@ class Dataset(nn.Module):
                     # id = int
                     feature_vec = item_features[id]
                     cur_disp_features_list.append(feature_vec)
-                print(len(cur_disp_features_list), "display_set lenght at a given time")
                 displayed_item_features_per_time.append(cur_disp_features_list)
+                if len(cur_disp_features_list) > max_display_set_features_length:
+                    max_display_set_features_length = len(cur_disp_features_list)
             self.display_set_features_per_user.append(displayed_item_features_per_time)
-
-                
-                # cur_disp_item_features_in_t = [] # --> [num_displayed_items, feature_dim]
-                # for disp_item_id_in_t in displayed_item_ids: # iterate through time
-                #     for id in disp_item_id_in_t: # iterate through displayed items at the given time
-                #         cur_disp_item_features_in_t.append(item_features[id])
-                #     displayed_item_features_per_time.append(cur_disp_item_features_in_t)
-                # self.display_set_features_per_user.append(displayed_item_features_per_time)
-
+            
+        # Pad the display_set
+        display_set_feature_dim = len(self.display_set_features_per_user[0][0][0]) # --> [user, num_time_steps, num_displayed_items, feature_dim]
+        temp_display_set_features_per_user = deepcopy(self.display_set_features_per_user)
+        for u_index, u in enumerate(temp_display_set_features_per_user):  # index on user
+            for t_index, t in enumerate(u): #index on num_time_steps (time)
+                if len(t) < max_display_set_features_length:
+                    diff = max_display_set_features_length - len(t)
+                    non_clickable_placeholder_vec = np.ones(display_set_feature_dim) # Note that we use ones vector as a placeholder for non_displayed items (padded)
+                    for i in range(diff):
+                        self.display_set_features_per_user[u_index][t_index].append(non_clickable_placeholder_vec)
+            
+            
         print(len(self.clicked_items_index_per_user) , "\t", len(self.picked_item_features_per_user), "\t", len(self.display_set_features_per_user))
         
         
