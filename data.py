@@ -55,9 +55,7 @@ class Dataset(nn.Module):
 
         max_display_set_features_length = 0 # will be used to pad display_set_features length to this value to have a tensor
         for u in users:
-            # create clicked item history in terms of its index in the display_set
-            # self.clicked_items_index_per_user.append(data_behavior[u][2])
-            
+
             # create clicked item (real user click) history in terms of its feature representation (dim = feature_dim)
             picked_item_features = [] # --> [num_time_steps, features]
             for picked_item_id in data_behavior[u][2]:
@@ -155,12 +153,6 @@ def custom_collate_fn(data):
     max_length = max(lengths_list)
     
     # Create the padded vectors
-    # # 1 1 ? 3
-    # print(data[0][0], "clicked_items")
-    # print(data[0][1], "real_click_history")
-    # print(data[0][2], "real_click_hisotry_length")
-    # print(data[0][3], "display_set")
-    # print(f"{len(data[0][0])} \t {len(data[0][1])} \t {(data[0][2])} \t {len(data[0][3])}")
     batch_size = len(data)
     feature_dim = len(data[0][1][0])
     num_displayed_item = len(data[0][3][0])

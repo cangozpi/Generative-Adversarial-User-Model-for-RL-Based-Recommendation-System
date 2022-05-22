@@ -30,7 +30,7 @@ class Discriminator_RewardModel(nn.Module):
         """
         Inputs:
             Input:
-                state (torch.Tensor): [num_time_steps, state_dim]
+                state (torch.Tensor): [max(num_time_steps), state_dim]
                 displayed_items (torch.Tensor): [max(num_time_steps), num_displayed_item, feature_dim]
             Returns:
                 reward (torch.float): reward value for taking the action at the given state. 
