@@ -135,19 +135,26 @@ class GAN():
 
 
                 # ============ Total loss backpropagation:
-                combined_loss = dfake_loss - dreal_loss
-
+                combined_loss0 = dfake_loss.clone() - dreal_loss.clone()
+                combined_loss1 = dfake_loss.clone()
                 # Backprop discriminator_RewardModel
                 # Note that discriminator_RewardModel tries to minimize the combined_loss
+                for param in self.discriminator_RewardModel.parameters():
+                    param.requires_grad = True
+                for param in self.generator_UserModel.parameters():
+                    param.requires_grad = False
                 discriminator_optimizer.zero_grad()
-                combined_loss.backward()
+                combined_loss0.backward(retain_graph=True)
                 discriminator_optimizer.step()
 
                 # backprop generator_UserModel
                 # Note that generator_UserModel tries to maximize the combined_loss
+                for param in self.generator_UserModel.parameters():
+                    param.requires_grad = True
+                for param in self.discriminator_RewardModel.parameters():
+                    param.requires_grad = False
                 generator_optimizer.zero_grad()
-                combined_loss *= -1
-                combined_loss.backward()
+                combined_loss1.backward()
                 generator_optimizer.step()
 
                 # logging
