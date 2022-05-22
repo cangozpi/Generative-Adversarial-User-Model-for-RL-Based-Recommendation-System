@@ -91,7 +91,7 @@ class Dataset(nn.Module):
                         self.display_set_features_per_user[u_index][t_index].append(non_clickable_placeholder_vec)
             
             
-        print(len(self.clicked_items_index_per_user) , "\t", len(self.picked_item_features_per_user), "\t", len(self.display_set_features_per_user))
+        # print(len(self.clicked_items_index_per_user) , "\t", len(self.picked_item_features_per_user), "\t", len(self.display_set_features_per_user))
         
         
 
@@ -170,25 +170,25 @@ def custom_collate_fn(data):
         # display_set --> [num_time_steps, num_displayed_item, feature_dim] 
         # ************************
         cur_clicked_items = torch.tensor(clicked_items) # --> [num_time_steps]
-        print(real_click_history_length, "\t ", cur_clicked_items.shape)
+        # print(real_click_history_length, "\t ", cur_clicked_items.shape)
         padded_clicked_items[i, :real_click_history_length] = cur_clicked_items
         
         cur_real_click_history = torch.tensor(real_click_history) # --> [num_time_steps, feature_dim]
-        print(real_click_history_length, "\t ", cur_real_click_history.shape)
+        # print(real_click_history_length, "\t ", cur_real_click_history.shape)
         padded_real_click_history[i, :real_click_history_length, :] = cur_real_click_history
 
         cur_display_set = torch.tensor(display_set) # --> [num_time_steps, num_displayed_item, feature_dim]
-        print(real_click_history_length, "\t ", cur_display_set.shape)
-        print("LOOOO", " true num_displayed_item = ",len(data[0][3][0]), " cur_display_set.shape = ", cur_display_set.shape)
+        # print(real_click_history_length, "\t ", cur_display_set.shape)
+        # print("True num_displayed_item = ",len(data[0][3][0]), " cur_display_set.shape = ", cur_display_set.shape)
         padded_display_set[i, :real_click_history_length, :, :] = cur_display_set
 
 
     # Make padded tensors compatible with LSTMs
-    batched_clicked_items = torch.nn.utils.rnn.pack_padded_sequence(padded_clicked_items, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), num_time_steps]
-    batched_click_history = torch.nn.utils.rnn.pack_padded_sequence(padded_real_click_history, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), num_time_steps, feature_dim]
-    batched_display_set = torch.nn.utils.rnn.pack_padded_sequence(padded_display_set, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), num_time_steps, num_displayed_item, feature_dim]
-
-    return batched_clicked_items, batched_click_history, batched_display_set
+    batched_click_history = torch.nn.utils.rnn.pack_padded_sequence(padded_real_click_history, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), max(num_time_steps), feature_dim]
+    batched_display_set = torch.nn.utils.rnn.pack_padded_sequence(padded_display_set, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), max(num_time_steps), num_displayed_item, feature_dim]
+    batched_clicked_items = torch.nn.utils.rnn.pack_padded_sequence(padded_clicked_items, lengths_list, batch_first=True, enforce_sorted = False) # --> [batch_size (#users), max(num_time_steps)]
+    
+    return batched_click_history, batched_display_set, batched_clicked_items, 
 
 
 # ==============================================================
