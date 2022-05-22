@@ -8,8 +8,8 @@ generator_output_size: 9
 generator_n_hidden: 8
 generator_hidden_dim: 512 
 
-discriminator_input_size: 7748 
-discriminator_output_size: 9
+discriminator_input_size: 9356 
+discriminator_output_size: 11
 discriminator_n_hidden: 8
 discriminator_hidden_dim: 512
 

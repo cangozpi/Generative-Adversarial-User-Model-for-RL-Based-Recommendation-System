@@ -56,7 +56,7 @@ class Dataset(nn.Module):
         max_display_set_features_length = 0 # will be used to pad display_set_features length to this value to have a tensor
         for u in users:
             # create clicked item history in terms of its index in the display_set
-            self.clicked_items_index_per_user.append(data_behavior[u][2])
+            # self.clicked_items_index_per_user.append(data_behavior[u][2])
             
             # create clicked item (real user click) history in terms of its feature representation (dim = feature_dim)
             picked_item_features = [] # --> [num_time_steps, features]
@@ -67,16 +67,23 @@ class Dataset(nn.Module):
             # create display_set history
             # convert displayed item indices to corresponding item features
             displayed_item_features_per_time = [] # --> [num_time_steps, num_displayed_items, feature_dim]
-            for displayed_item_ids in data_behavior[u][1]: # index on time
+            clicked_items_per_time = [] # --> [num_time_steps]
+            for t, displayed_item_ids in enumerate(data_behavior[u][1]): # index on time
                 # displayed_item_ids = [num_displayed_item]
                 cur_disp_features_list = [] # --> [num_displayed_items, feature_dim]
-                for id in displayed_item_ids: # index on ids in the given displayed_items
+                for index, id in enumerate(displayed_item_ids): # index on ids in the given displayed_items
+                    # create clicked item history in terms of its index in the display_set
+                    if id == data_behavior[u][2][t]:
+                        clicked_items_per_time.append(index)
+
                     # id = int
                     feature_vec = item_features[id]
                     cur_disp_features_list.append(feature_vec)
                 displayed_item_features_per_time.append(cur_disp_features_list)
                 if len(cur_disp_features_list) > max_display_set_features_length:
                     max_display_set_features_length = len(cur_disp_features_list)
+            
+            self.clicked_items_index_per_user.append(clicked_items_per_time)
             self.display_set_features_per_user.append(displayed_item_features_per_time)
             
         # Pad the display_set
