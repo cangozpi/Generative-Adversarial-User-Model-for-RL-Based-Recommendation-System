@@ -15,10 +15,10 @@ class Generator_UserModel(nn.Module):
         self.input_size = input_size
         layers = []
         
-        layers.extend([torch.nn.Linear(input_size, hidden_dim),torch.nn.ReLU(inplace=False)])
+        layers.extend([torch.nn.Linear(input_size, hidden_dim),torch.nn.ReLU()])
         
         for n in range(n_hidden-1):
-            layers.extend([torch.nn.Linear(hidden_dim, hidden_dim),torch.nn.ReLU(inplace=False)])
+            layers.extend([torch.nn.Linear(hidden_dim, hidden_dim),torch.nn.ReLU()])
             
             
         # Classification Layer (outputs score for each display_item)

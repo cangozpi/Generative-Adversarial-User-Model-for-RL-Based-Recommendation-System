@@ -136,7 +136,7 @@ class GAN():
 
                 # Update Disciriminator (Reward) model
                 # ============ loss backpropagation:
-                combined_loss = dfake_loss.clone() - dreal_loss.clone()
+                combined_loss = dfake_loss - dreal_loss
                 # Backprop discriminator_RewardModel
                 # Note that discriminator_RewardModel tries to minimize the combined_loss
                 for param in self.discriminator_RewardModel.parameters():
