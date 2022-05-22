@@ -93,10 +93,7 @@ class GAN():
                 dreal_reward = self.discriminator_RewardModel.forward(real_states, display_set) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                 
                 # Calculate the rewards for the real user actions by masking by the actions taken by the real user
-                print(clicked_items.data.long(), "clicked_items.shape UU", (clicked_items.data.shape[0])+1, "= num_classes")
-                print(dreal_reward.shape, "UU")
                 class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
-                print(class_num, "OO")
                 clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                 gt_reward = dreal_reward * clicked_item_mask
                 dreal_loss = torch.sum(gt_reward) # total loss/rewards for the real user actions (gt)

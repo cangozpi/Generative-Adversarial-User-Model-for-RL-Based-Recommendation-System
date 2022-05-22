@@ -3,8 +3,8 @@ history_input_size: 804
 history_hidden_size: 512
 history_num_layers: 8
 
-generator_input_size: 7748
-generator_output_size: 9
+generator_input_size: 9356
+generator_output_size: 11
 generator_n_hidden: 8
 generator_hidden_dim: 512 
 
