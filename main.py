@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     # Train/Test using the GAN model
     if args.mode == "train":
-        gan.gan_training_loop(train_dataloader, val_dataloader)
+        train_dreal_losses, train_dfake_losses, val_dreal_losses, val_dfake_losses = gan.gan_training_loop(train_dataloader, val_dataloader)
     else:
         # gan.test(test_dataloader) #TODO
         pass

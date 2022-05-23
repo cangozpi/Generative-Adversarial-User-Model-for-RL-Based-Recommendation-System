@@ -1,8 +1,31 @@
+from cProfile import label
 import torch
 # import custom models
 from model.historyLSTM import History_LSTM
 from model.generator import Generator_UserModel
 from model.discriminator import Discriminator_RewardModel
+import matplotlib.pyplot as plt
+
+def plot_results(dreal_losses, dfake_losses, val_dreal_losses, val_dfake_losses):
+    plt.figure()
+    plt.plot(list(range(1, len(dreal_losses)+1)), dreal_losses, marker='o', label="dreal_loss")
+    plt.plot(list(range(1, len(dfake_losses)+1)), dfake_losses, marker='*', label="dfake_loss")
+    plt.title("Training Losses")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend(loc="upper right")
+    plt.savefig("results/Training Losses Plot")
+
+    plt.figure()
+    plt.plot(list(range(1, len(val_dreal_losses)+1)), val_dreal_losses, marker='o', label="dreal_loss")
+    plt.plot(list(range(1, len(val_dfake_losses)+1)), val_dfake_losses, marker='*', label="dfake_loss")
+    plt.title("Validation Losses")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend(loc="upper right")
+    plt.savefig("results/Validation Losses Plot")
+
+    plt.show()
 
 # Note that GAN is a model which orchestrated the mini-max game (training) between the  discriminator and the  generator model.
 class GAN():
@@ -54,14 +77,16 @@ class GAN():
             ground_truth_rewards (torch.tensor): Reward values for the ground truth actions.
         """
         #TODO implement validation
-
+        history_LSTM_optimizer = torch.optim.Adam(self.history_LSTM.parameters(), lr=self.lr, betas=self.betas)
         discriminator_optimizer = torch.optim.Adam(self.discriminator_RewardModel.parameters(), lr=self.lr, betas=self.betas)
         generator_optimizer = torch.optim.Adam(self.generator_UserModel.parameters(), lr=self.lr, betas=self.betas)
 
 
         # Initialize empty lists to hold the generator and discriminator losses
-        dfake_losses = []
+        dfake_losses = [] # training losses
         dreal_losses = []
+        val_dfake_losses = [] # validation losses
+        val_dreal_losses = []
 
         print("*" * 30)
         print("Training GAN Model")
@@ -77,6 +102,7 @@ class GAN():
                 
                 real_click_history = real_click_history.to(self.device)
                 display_set = display_set.to(self.device)
+                clicked_items = clicked_items.to(self.device)
 
                 # Updating the discriminator, here is a pseudocode        
                 # call zero grad
@@ -148,8 +174,10 @@ class GAN():
                     param.requires_grad = True
                 for param in self.generator_UserModel.parameters():
                     param.requires_grad = False
+                history_LSTM_optimizer.zero_grad()
                 discriminator_optimizer.zero_grad()
                 combined_loss.backward()
+                history_LSTM_optimizer.step()
                 discriminator_optimizer.step()
 
 
@@ -194,8 +222,10 @@ class GAN():
                     param.requires_grad = True
                 for param in self.discriminator_RewardModel.parameters():
                     param.requires_grad = False
+                history_LSTM_optimizer.zero_grad()
                 generator_optimizer.zero_grad()
                 combined_loss.backward()
+                history_LSTM_optimizer.step()
                 generator_optimizer.step()
 
                 # record losses
@@ -206,11 +236,83 @@ class GAN():
             dreal_losses.append(cur_dfake_loss)
             dfake_losses.append(cur_dreal_loss)
 
-                
-            print(f"epoch: [{epoch}/{self.epochs}], dreal_loss: {dreal_losses[-1]}, dfake_loss: {dfake_losses[-1]}")
+        
 
+            # ================== Validation part
+            val_cur_dreal_loss = 0 # total loss for cur batch
+            val_cur_dfake_loss = 0 # total loss for cur batch
+            for real_click_history, display_set, clicked_items  in validation_loader:
+                # real_click_history --> [max(num_time_steps), feature_dim]
+                # display_set --> [max(num_time_steps), num_displayed_item, feature_dim]
+                # clicked_items --> [max(num_time_steps)] display set index of the clicked items by the real user (gt user actions)
+                
+                real_click_history = real_click_history.to(self.device)
+                display_set = display_set.to(self.device)
+                clicked_items = clicked_items.to(self.device)
+
+                with torch.no_grad():
+                     # Obtain state representations given the real user's past click history
+                    real_states = self.history_LSTM(real_click_history) # --> [batch_size (#users)=1, num_time_steps, state_dim]
+                    # Calculate the rewards for all of the possible actions (items in the (display_set+1))
+                    dreal_reward = self.discriminator_RewardModel.forward(real_states, display_set) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
+                    
+                    # Calculate the rewards for the real user actions by masking by the actions taken by the real user
+                    class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
+                    clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
+                    gt_reward = dreal_reward * clicked_item_mask
+                    dreal_loss = torch.sum(gt_reward) / dreal_reward.shape[1] # avg loss/rewards for the real user actions (gt)
+
+
+
+                    # ========== generator_UserModel Loss Calculation below: 
+                    # Obtain generated user action's indices/feature vectors for 1 time step ahead given the past real users state representation
+                    generated_action_indices , generated_action_vectors = self.generator_UserModel.generate_actions(real_states, display_set)  # --> [batch_size (#users), num_time_steps] , [batch_size (#users), num_time_steps, feature_dims]
+                    # convert rnn.PackedSequence to Tensor
+                    real_click_history = real_click_history.data
+                    real_click_history = real_click_history.unsqueeze(0)
+                    # generated_action_vectors --> [batch_size (#users), num_time_steps, feature_dims]
+                    gen_reward = 0
+                    for b in range(generated_action_vectors.shape[0]): # index on batch_size
+                        for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
+                            cur_generated_action_vector = generated_action_vectors[b, t, :] # --> [feature_dim]
+                            cur_real_past_actions = real_click_history[b, :t, :] # --> [t, feature_dim]
+                            # append generated action to past history from the real user
+                            cur_generated_action_with_history = torch.cat((cur_real_past_actions, cur_generated_action_vector.unsqueeze(0)), dim=0) # --> [t+1, feature_dim]
+                            cur_generated_action_with_history = cur_generated_action_with_history.unsqueeze(0) # --> [1, t+1, feature_dim]
+                            # obtain new state representations after taking the current generated action
+                            cur_fake_state = self.history_LSTM(cur_generated_action_with_history) # --> [1, t+1, state_dim]
+                            # calculate the reward for the currently generated action
+                            cur_display_set = display_set.data.unsqueeze(0)[b, :t+1, :, :].unsqueeze(0) # --> [1, t+1, num_displayed_item, feature_dim]
+                            cur_dfake_reward = self.discriminator_RewardModel(cur_fake_state.squeeze(0), cur_display_set.squeeze(0)) # --> [1, t+1, (num_displayed_items+1)]
+
+                            # Calculate the rewards for the generated user actions by masking by the generated rewards for all of the possible acitons in the display_set
+                            cur_generated_action_indices = generated_action_indices[b, :t+1].unsqueeze(0) # --> [1, t+1]
+                            
+                            class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
+                            clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
+                            cur_clicked_item_mask = torch.nn.functional.one_hot(cur_generated_action_indices, num_classes= class_num) # --> [1, t+1, (num_displayed_items+1)]
+                            
+                            cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask # --> [1, t+1, (num_displayed_items+1)]
+                            gen_reward += torch.sum(cur_gen_reward) / cur_gen_reward.shape[1]
+                    
+                    dfake_loss = gen_reward # total loss/rewards for the real user actions (gt)
+
+                    # record losses
+                    val_cur_dfake_loss += dreal_loss.detach().cpu().numpy()
+                    val_cur_dreal_loss += dfake_loss.detach().cpu().numpy()
+
+            # logging
+            val_dreal_losses.append(val_cur_dfake_loss)
+            val_dfake_losses.append(val_cur_dreal_loss)
+
+            print("_" * 25)
+            print(f"epoch: [{epoch+1}/{self.epochs}], train_dreal_loss: {dreal_losses[-1]}, train_dfake_loss: {dfake_losses[-1]} \
+                val_dreal_loss: {val_dreal_losses[-1]}, val_dfake_loss: {val_dfake_losses[-1]}")
+            print("_" * 25)
+
+        plot_results(dreal_losses, dfake_losses, val_dreal_losses, val_dfake_losses)
         # Return the losses
-        return dreal_losses, dfake_losses
+        return dreal_losses, dfake_losses, val_dreal_losses, val_dfake_losses
 
 
     def test(self):

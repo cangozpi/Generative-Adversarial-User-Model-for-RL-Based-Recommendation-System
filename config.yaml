@@ -15,7 +15,7 @@ discriminator_hidden_dim: 512
 
 lr: 0.0006
 betas: [0.3,0.999]
-epochs: 150
+epochs: 100
 batch_size: 16
 
 
