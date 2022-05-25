@@ -11,7 +11,7 @@ class History_LSTM(nn.Module):
         num_layers (int): number of recurrent layers in the LSTM model.
         """
         super().__init__()
-        self.device = "gpu" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.num_layers = num_layers
         self.state_dim = hidden_size
         self.lstm_model = torch.nn.LSTM(input_size, self.state_dim, self.num_layers, batch_first=True).to(self.device)

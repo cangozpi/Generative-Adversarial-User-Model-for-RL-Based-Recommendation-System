@@ -56,7 +56,7 @@ class GAN():
             betas (tuple): beta values used by the ADAM optimizer.
             epochs (int): number of epochs to train.
         """
-        self.device = "gpu" if torch.cuda.is_available() else "cpu"
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.history_LSTM = History_LSTM(history_input_size, history_hidden_size, history_num_layers).to(self.device)
         self.generator_UserModel = Generator_UserModel(generator_input_size, generator_output_size, generator_n_hidden, generator_hidden_dim).to(self.device)
         self.discriminator_RewardModel = Discriminator_RewardModel(discriminator_input_size, discriminator_output_size, discriminator_n_hidden, discriminator_hidden_dim).to(self.device)
@@ -100,6 +100,8 @@ class GAN():
                 # display_set --> [max(num_time_steps), num_displayed_item, feature_dim]
                 # clicked_items --> [max(num_time_steps)] display set index of the clicked items by the real user (gt user actions)
                 
+                lengths = torch.nn.utils.rnn.pad_packed_sequence(real_click_history)
+                 
                 real_click_history = real_click_history.to(self.device)
                 display_set = display_set.to(self.device)
                 clicked_items = clicked_items.to(self.device)
@@ -142,8 +144,8 @@ class GAN():
                 gen_reward = 0
                 for b in range(generated_action_vectors.shape[0]): # index on batch_size
                     for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
-                        cur_generated_action_vector = generated_action_vectors[b, t, :] # --> [feature_dim]
-                        cur_real_past_actions = real_click_history[b, :t, :] # --> [t, feature_dim]
+                        cur_generated_action_vector = generated_action_vectors[b, t, :].to(self.device) # --> [feature_dim]
+                        cur_real_past_actions = real_click_history[b, :t, :].to(self.device) # --> [t, feature_dim]
                         # append generated action to past history from the real user
                         cur_generated_action_with_history = torch.cat((cur_real_past_actions, cur_generated_action_vector.unsqueeze(0)), dim=0) # --> [t+1, feature_dim]
                         cur_generated_action_with_history = cur_generated_action_with_history.unsqueeze(0) # --> [1, t+1, feature_dim]
@@ -189,8 +191,8 @@ class GAN():
                 gen_reward = 0
                 for b in range(generated_action_vectors.shape[0]): # index on batch_size
                     for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
-                        cur_generated_action_vector = generated_action_vectors[b, t, :] # --> [feature_dim]
-                        cur_real_past_actions = real_click_history[b, :t, :] # --> [t, feature_dim]
+                        cur_generated_action_vector = generated_action_vectors[b, t, :].to(self.device) # --> [feature_dim]
+                        cur_real_past_actions = real_click_history[b, :t, :].to(self.device) # --> [t, feature_dim]
                         # append generated action to past history from the real user
                         cur_generated_action_with_history = torch.cat((cur_real_past_actions, cur_generated_action_vector.unsqueeze(0)), dim=0) # --> [t+1, feature_dim]
                         cur_generated_action_with_history = cur_generated_action_with_history.unsqueeze(0) # --> [1, t+1, feature_dim]
@@ -274,8 +276,8 @@ class GAN():
                     gen_reward = 0
                     for b in range(generated_action_vectors.shape[0]): # index on batch_size
                         for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
-                            cur_generated_action_vector = generated_action_vectors[b, t, :] # --> [feature_dim]
-                            cur_real_past_actions = real_click_history[b, :t, :] # --> [t, feature_dim]
+                            cur_generated_action_vector = generated_action_vectors[b, t, :].to(self.device) # --> [feature_dim]
+                            cur_real_past_actions = real_click_history[b, :t, :].to(self.device) # --> [t, feature_dim]
                             # append generated action to past history from the real user
                             cur_generated_action_with_history = torch.cat((cur_real_past_actions, cur_generated_action_vector.unsqueeze(0)), dim=0) # --> [t+1, feature_dim]
                             cur_generated_action_with_history = cur_generated_action_with_history.unsqueeze(0) # --> [1, t+1, feature_dim]
