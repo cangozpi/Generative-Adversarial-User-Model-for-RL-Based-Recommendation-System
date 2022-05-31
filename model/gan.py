@@ -99,8 +99,6 @@ class GAN():
                 # real_click_history --> [max(num_time_steps), feature_dim]
                 # display_set --> [max(num_time_steps), num_displayed_item, feature_dim]
                 # clicked_items --> [max(num_time_steps)] display set index of the clicked items by the real user (gt user actions)
-                
-                lengths = torch.nn.utils.rnn.pad_packed_sequence(real_click_history)
                  
                 real_click_history = real_click_history.to(self.device)
                 display_set = display_set.to(self.device)
@@ -128,7 +126,7 @@ class GAN():
                 # Calculate the rewards for the real user actions by masking by the actions taken by the real user
                 class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
                 clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
-                gt_reward = dreal_reward * clicked_item_mask
+                gt_reward = dreal_reward * clicked_item_mask.float()
                 dreal_loss = torch.sum(gt_reward) / dreal_reward.shape[1] # avg loss/rewards for the real user actions (gt)
 
 
@@ -162,7 +160,7 @@ class GAN():
                         clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                         cur_clicked_item_mask = torch.nn.functional.one_hot(cur_generated_action_indices, num_classes= class_num) # --> [1, t+1, (num_displayed_items+1)]
                         
-                        cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask # --> [1, t+1, (num_displayed_items+1)]
+                        cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask.float() # --> [1, t+1, (num_displayed_items+1)]
                         gen_reward += torch.sum(cur_gen_reward) / cur_gen_reward.shape[1]
                 
                 dfake_loss = gen_reward # total loss/rewards for the real user actions (gt)
@@ -210,7 +208,7 @@ class GAN():
                         clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                         cur_clicked_item_mask = torch.nn.functional.one_hot(cur_generated_action_indices, num_classes= class_num) # --> [1, t+1, (num_displayed_items+1)]
                         
-                        cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask # --> [1, t+1, (num_displayed_items+1)]
+                        cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask.float() # --> [1, t+1, (num_displayed_items+1)]
                         gen_reward += torch.sum(cur_gen_reward) / cur_gen_reward.shape[1]
                 
                 dfake_loss = gen_reward # total loss/rewards for the real user actions (gt)
@@ -261,7 +259,7 @@ class GAN():
                     # Calculate the rewards for the real user actions by masking by the actions taken by the real user
                     class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
                     clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
-                    gt_reward = dreal_reward * clicked_item_mask
+                    gt_reward = dreal_reward * clicked_item_mask.float()
                     dreal_loss = torch.sum(gt_reward) / dreal_reward.shape[1] # avg loss/rewards for the real user actions (gt)
 
 
@@ -294,7 +292,7 @@ class GAN():
                             clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                             cur_clicked_item_mask = torch.nn.functional.one_hot(cur_generated_action_indices, num_classes= class_num) # --> [1, t+1, (num_displayed_items+1)]
                             
-                            cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask # --> [1, t+1, (num_displayed_items+1)]
+                            cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask.float() # --> [1, t+1, (num_displayed_items+1)]
                             gen_reward += torch.sum(cur_gen_reward) / cur_gen_reward.shape[1]
                     
                     dfake_loss = gen_reward # total loss/rewards for the real user actions (gt)
