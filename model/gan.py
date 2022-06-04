@@ -76,7 +76,6 @@ class GAN():
             UserModel_rewards (torch.tensor): Reward values for the generator_UserModel generated actions.
             ground_truth_rewards (torch.tensor): Reward values for the ground truth actions.
         """
-        #TODO implement validation
         history_LSTM_optimizer = torch.optim.Adam(self.history_LSTM.parameters(), lr=self.lr, betas=self.betas)
         discriminator_optimizer = torch.optim.Adam(self.discriminator_RewardModel.parameters(), lr=self.lr, betas=self.betas)
         generator_optimizer = torch.optim.Adam(self.generator_UserModel.parameters(), lr=self.lr, betas=self.betas)
@@ -116,7 +115,7 @@ class GAN():
 
 
 
-                # ========== discriminator_RewardModel Loss Calculation below:
+                # ************************************ discriminator_RewardModel Loss Calculation below: ************************************
 
                 # Obtain state representations given the real user's past click history
                 real_states = self.history_LSTM(real_click_history) # --> [batch_size (#users)=1, num_time_steps, state_dim]
@@ -125,9 +124,11 @@ class GAN():
                 
                 # Calculate the rewards for the real user actions by masking by the actions taken by the real user
                 class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
-                clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
+                clicked_items_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(clicked_items, batch_first=True)
+                clicked_item_mask = torch.nn.functional.one_hot(clicked_items_unpacked.long(), num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                 gt_reward = dreal_reward * clicked_item_mask.float()
-                dreal_loss = torch.sum(gt_reward) / dreal_reward.shape[1] # avg loss/rewards for the real user actions (gt)
+                _, total_unpadded_num_time_steps = torch.nn.utils.rnn.pad_packed_sequence(real_click_history, batch_first=True)
+                dreal_loss = torch.sum(gt_reward) / sum(total_unpadded_num_time_steps) # avg loss/rewards for the real user actions (gt)
 
 
 
@@ -136,28 +137,28 @@ class GAN():
                 with torch.no_grad():
                     generated_action_indices , generated_action_vectors = self.generator_UserModel.generate_actions(real_states, display_set)  # --> [batch_size (#users), num_time_steps] , [batch_size (#users), num_time_steps, feature_dims]
                 # convert rnn.PackedSequence to Tensor
-                real_click_history = real_click_history.data
-                real_click_history = real_click_history.unsqueeze(0)
+                real_click_history_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(real_click_history, batch_first=True)
                 # generated_action_vectors --> [batch_size (#users), num_time_steps, feature_dims]
-                gen_reward = 0
+                gen_reward = torch.tensor(0).float().to(self.device)
                 for b in range(generated_action_vectors.shape[0]): # index on batch_size
                     for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
                         cur_generated_action_vector = generated_action_vectors[b, t, :].to(self.device) # --> [feature_dim]
-                        cur_real_past_actions = real_click_history[b, :t, :].to(self.device) # --> [t, feature_dim]
+                        cur_real_past_actions = real_click_history_unpacked[b, :t, :].to(self.device) # --> [t, feature_dim]
                         # append generated action to past history from the real user
                         cur_generated_action_with_history = torch.cat((cur_real_past_actions, cur_generated_action_vector.unsqueeze(0)), dim=0) # --> [t+1, feature_dim]
                         cur_generated_action_with_history = cur_generated_action_with_history.unsqueeze(0) # --> [1, t+1, feature_dim]
                         # obtain new state representations after taking the current generated action
                         cur_fake_state = self.history_LSTM(cur_generated_action_with_history) # --> [1, t+1, state_dim]
+
                         # calculate the reward for the currently generated action
-                        cur_display_set = display_set.data.unsqueeze(0)[b, :t+1, :, :].unsqueeze(0) # --> [1, t+1, num_displayed_item, feature_dim]
-                        cur_dfake_reward = self.discriminator_RewardModel(cur_fake_state.squeeze(0), cur_display_set.squeeze(0)) # --> [1, t+1, (num_displayed_items+1)]
+                        display_set_unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(display_set, batch_first=True)
+                        cur_display_set = display_set_unpacked[b, :t+1, :, :].unsqueeze(0) # --> [1, t+1, num_displayed_item, feature_dim]
+                        cur_dfake_reward = self.discriminator_RewardModel(cur_fake_state, cur_display_set) # --> [1, t+1, (num_displayed_items+1)]
 
                         # Calculate the rewards for the generated user actions by masking by the generated rewards for all of the possible acitons in the display_set
                         cur_generated_action_indices = generated_action_indices[b, :t+1].unsqueeze(0) # --> [1, t+1]
                         
                         class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
-                        clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                         cur_clicked_item_mask = torch.nn.functional.one_hot(cur_generated_action_indices, num_classes= class_num) # --> [1, t+1, (num_displayed_items+1)]
                         
                         cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask.float() # --> [1, t+1, (num_displayed_items+1)]
@@ -168,38 +169,43 @@ class GAN():
                 # Update Disciriminator (Reward) model
                 # ============ loss backpropagation:
                 combined_loss = dfake_loss - dreal_loss
-                # Backprop discriminator_RewardModel
-                # Note that discriminator_RewardModel tries to minimize the combined_loss
-                for param in self.discriminator_RewardModel.parameters():
-                    param.requires_grad = True
-                for param in self.generator_UserModel.parameters():
-                    param.requires_grad = False
-                history_LSTM_optimizer.zero_grad()
-                discriminator_optimizer.zero_grad()
-                combined_loss.backward()
-                history_LSTM_optimizer.step()
-                discriminator_optimizer.step()
+                if combined_loss.requires_grad:
+                    # Backprop discriminator_RewardModel
+                    # Note that discriminator_RewardModel tries to minimize the combined_loss
+                    for param in self.discriminator_RewardModel.parameters():
+                        param.requires_grad = True
+                    for param in self.generator_UserModel.parameters():
+                        param.requires_grad = False
+                    history_LSTM_optimizer.zero_grad()
+                    generator_optimizer.zero_grad()
+                    discriminator_optimizer.zero_grad()
+                    combined_loss.backward()
+                    history_LSTM_optimizer.step()
+                    discriminator_optimizer.step()
 
 
-                # ========== generator_UserModel Loss Calculation below: 
+
+
+                # ************************************ generator_UserModel Loss Calculation below: ************************************
                 # Obtain generated user action's indices/feature vectors for 1 time step ahead given the past real users state representation
                 generated_action_indices , generated_action_vectors = self.generator_UserModel.generate_actions(real_states, display_set)  # --> [batch_size (#users), num_time_steps] , [batch_size (#users), num_time_steps, feature_dims]
                 # convert rnn.PackedSequence to Tensor
                 # generated_action_vectors --> [batch_size (#users), num_time_steps, feature_dims]
-                gen_reward = 0
+                gen_reward = torch.tensor(0).float().to(self.device)
                 for b in range(generated_action_vectors.shape[0]): # index on batch_size
                     for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
                         cur_generated_action_vector = generated_action_vectors[b, t, :].to(self.device) # --> [feature_dim]
-                        cur_real_past_actions = real_click_history[b, :t, :].to(self.device) # --> [t, feature_dim]
+                        cur_real_past_actions = real_click_history_unpacked[b, :t, :].to(self.device) # --> [t, feature_dim]
                         # append generated action to past history from the real user
                         cur_generated_action_with_history = torch.cat((cur_real_past_actions, cur_generated_action_vector.unsqueeze(0)), dim=0) # --> [t+1, feature_dim]
                         cur_generated_action_with_history = cur_generated_action_with_history.unsqueeze(0) # --> [1, t+1, feature_dim]
                         # obtain new state representations after taking the current generated action
                         cur_fake_state = self.history_LSTM(cur_generated_action_with_history) # --> [1, t+1, state_dim]
                         # calculate the reward for the currently generated action
-                        cur_display_set = display_set.data.unsqueeze(0)[b, :t+1, :, :].unsqueeze(0) # --> [1, t+1, num_displayed_item, feature_dim]
+                        display_set_unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(display_set, batch_first=True)
+                        cur_display_set = display_set_unpacked[b, :t+1, :, :].unsqueeze(0) # --> [1, t+1, num_displayed_item, feature_dim]
                         
-                        cur_dfake_reward = self.discriminator_RewardModel(cur_fake_state.squeeze(0), cur_display_set.squeeze(0)) # --> [1, t+1, (num_displayed_items+1)]
+                        cur_dfake_reward = self.discriminator_RewardModel(cur_fake_state, cur_display_set) # --> [1, t+1, (num_displayed_items+1)]
 
                         # Calculate the rewards for the generated user actions by masking by the generated rewards for all of the possible acitons in the display_set
                         cur_generated_action_indices = generated_action_indices[b, :t+1].unsqueeze(0) # --> [1, t+1]
@@ -211,26 +217,27 @@ class GAN():
                         cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask.float() # --> [1, t+1, (num_displayed_items+1)]
                         gen_reward += torch.sum(cur_gen_reward) / cur_gen_reward.shape[1]
                 
-                dfake_loss = gen_reward # total loss/rewards for the real user actions (gt)
-
-
+                dfake_loss = -1 * gen_reward # total loss/rewards for the real user actions (gt)
+                
                 # ============ loss backpropagation:
                 combined_loss = dfake_loss
-                # backprop generator_UserModel
-                # Note that generator_UserModel tries to maximize the combined_loss
-                for param in self.generator_UserModel.parameters():
-                    param.requires_grad = True
-                for param in self.discriminator_RewardModel.parameters():
-                    param.requires_grad = False
-                history_LSTM_optimizer.zero_grad()
-                generator_optimizer.zero_grad()
-                combined_loss.backward()
-                history_LSTM_optimizer.step()
-                generator_optimizer.step()
+                if combined_loss.requires_grad:
+                    # backprop generator_UserModel
+                    # Note that generator_UserModel tries to maximize the combined_loss
+                    for param in self.generator_UserModel.parameters():
+                        param.requires_grad = True
+                    for param in self.discriminator_RewardModel.parameters():
+                        param.requires_grad = False
+                    history_LSTM_optimizer.zero_grad()
+                    generator_optimizer.zero_grad()
+                    discriminator_optimizer.zero_grad()
+                    combined_loss.backward()
+                    history_LSTM_optimizer.step()
+                    generator_optimizer.step()
 
-                # record losses
-                cur_dfake_loss += dreal_loss.detach().cpu().numpy()
-                cur_dreal_loss += dfake_loss.detach().cpu().numpy()
+                    # record losses
+                    cur_dfake_loss += dreal_loss.detach().cpu().numpy()
+                    cur_dreal_loss += dfake_loss.detach().cpu().numpy()
 
             # logging
             dreal_losses.append(cur_dfake_loss)
@@ -258,7 +265,8 @@ class GAN():
                     
                     # Calculate the rewards for the real user actions by masking by the actions taken by the real user
                     class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
-                    clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
+                    clicked_items_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(clicked_items, batch_first=True)
+                    clicked_item_mask = torch.nn.functional.one_hot(clicked_items_unpacked.long(), num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                     gt_reward = dreal_reward * clicked_item_mask.float()
                     dreal_loss = torch.sum(gt_reward) / dreal_reward.shape[1] # avg loss/rewards for the real user actions (gt)
 
@@ -268,28 +276,27 @@ class GAN():
                     # Obtain generated user action's indices/feature vectors for 1 time step ahead given the past real users state representation
                     generated_action_indices , generated_action_vectors = self.generator_UserModel.generate_actions(real_states, display_set)  # --> [batch_size (#users), num_time_steps] , [batch_size (#users), num_time_steps, feature_dims]
                     # convert rnn.PackedSequence to Tensor
-                    real_click_history = real_click_history.data
-                    real_click_history = real_click_history.unsqueeze(0)
+                    real_click_history_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(real_click_history, batch_first=True)
                     # generated_action_vectors --> [batch_size (#users), num_time_steps, feature_dims]
-                    gen_reward = 0
+                    gen_reward = torch.tensor(0).float().to(self.device)
                     for b in range(generated_action_vectors.shape[0]): # index on batch_size
                         for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
                             cur_generated_action_vector = generated_action_vectors[b, t, :].to(self.device) # --> [feature_dim]
-                            cur_real_past_actions = real_click_history[b, :t, :].to(self.device) # --> [t, feature_dim]
+                            cur_real_past_actions = real_click_history_unpacked[b, :t, :].to(self.device) # --> [t, feature_dim]
                             # append generated action to past history from the real user
                             cur_generated_action_with_history = torch.cat((cur_real_past_actions, cur_generated_action_vector.unsqueeze(0)), dim=0) # --> [t+1, feature_dim]
                             cur_generated_action_with_history = cur_generated_action_with_history.unsqueeze(0) # --> [1, t+1, feature_dim]
                             # obtain new state representations after taking the current generated action
                             cur_fake_state = self.history_LSTM(cur_generated_action_with_history) # --> [1, t+1, state_dim]
                             # calculate the reward for the currently generated action
-                            cur_display_set = display_set.data.unsqueeze(0)[b, :t+1, :, :].unsqueeze(0) # --> [1, t+1, num_displayed_item, feature_dim]
-                            cur_dfake_reward = self.discriminator_RewardModel(cur_fake_state.squeeze(0), cur_display_set.squeeze(0)) # --> [1, t+1, (num_displayed_items+1)]
+                            display_set_unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(display_set, batch_first=True)
+                            cur_display_set = display_set_unpacked[b, :t+1, :, :].unsqueeze(0) # --> [1, t+1, num_displayed_item, feature_dim]
+                            cur_dfake_reward = self.discriminator_RewardModel(cur_fake_state, cur_display_set) # --> [1, t+1, (num_displayed_items+1)]
 
                             # Calculate the rewards for the generated user actions by masking by the generated rewards for all of the possible acitons in the display_set
                             cur_generated_action_indices = generated_action_indices[b, :t+1].unsqueeze(0) # --> [1, t+1]
                             
                             class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
-                            clicked_item_mask = torch.nn.functional.one_hot(clicked_items.long().data, num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                             cur_clicked_item_mask = torch.nn.functional.one_hot(cur_generated_action_indices, num_classes= class_num) # --> [1, t+1, (num_displayed_items+1)]
                             
                             cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask.float() # --> [1, t+1, (num_displayed_items+1)]

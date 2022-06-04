@@ -38,11 +38,10 @@ class Discriminator_RewardModel(nn.Module):
                 [batch_size (#users), num_time_steps, (num_displayed_items+1)]
         """
         # Convert rnn.PackedSequences to simple Tensors
-        state = state.data
-        displayed_items = displayed_items.data
-        # add batch dimension to tensors since we batched on users
-        state = state.unsqueeze(0)
-        displayed_items = displayed_items.unsqueeze(0)
+        if isinstance(state, torch.nn.utils.rnn.PackedSequence):
+            state, _ = torch.nn.utils.rnn.pad_packed_sequence(state, batch_first=True)
+        if isinstance(displayed_items, torch.nn.utils.rnn.PackedSequence):
+            displayed_items, _ = torch.nn.utils.rnn.pad_packed_sequence(displayed_items, batch_first=True)
         
         # Prepare input
         batch_size = state.shape[0] # B

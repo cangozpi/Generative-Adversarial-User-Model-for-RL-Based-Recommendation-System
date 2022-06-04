@@ -37,24 +37,19 @@ class Generator_UserModel(nn.Module):
             action_scores (torch.Tensor): [batch_size (#users), num_time_steps, num_displayed_items]
         """
         # Convert rnn.PackedSequences to simple Tensors
-        state = state.data
-        displayed_items = displayed_items.data
-        # add batch dimension to tensors since we batched on users
-        state = state.unsqueeze(0)
-        displayed_items = displayed_items.unsqueeze(0)
-
+        state_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(state, batch_first=True)
+        displayed_items_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(displayed_items, batch_first=True)
+        
         # Prepare input
-        batch_size = state.shape[0]
-        num_time_steps = state.shape[1]
+        batch_size = state_unpacked.shape[0] # B
+        num_time_steps = displayed_items_unpacked.shape[1] # L
         # concat zero vector to displayed items to represent user not clicking on any of the displayed items
-        not_clicking_feature_vec = torch.zeros((batch_size, num_time_steps, 1, displayed_items.shape[-1])).to(self.device) # --> [batch_size (#users), max(num_time_steps), 1, feature_dim]
-        displayed_items = torch.cat((displayed_items, not_clicking_feature_vec), -2).to(self.device) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1), feature_dims]
-        displayed_items_flat = displayed_items.view(batch_size, num_time_steps,-1) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)*feature_dims]
-        input_features = torch.cat((displayed_items_flat, state), dim=-1) # --> [batch_size (#users), num_time_steps, ((num_displayed_items+1)*feature_dims + state_dim)]
+        not_clicking_feature_vec = torch.zeros((batch_size, num_time_steps, 1, displayed_items_unpacked.shape[-1])) # --> [batch_size (#users), max(num_time_steps), 1, feature_dim]
+        displayed_items_unpacked = torch.cat((displayed_items_unpacked.to(self.device), not_clicking_feature_vec.to(self.device)), -2) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1), feature_dims]
+        displayed_items_flat = displayed_items_unpacked.view(batch_size, num_time_steps, -1) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)*feature_dims]
+        input_features = torch.cat((displayed_items_flat, state_unpacked), dim=-1) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items*feature_dims) + state_dim]
         
-        out = self.model(input_features) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1)]
-        
-        return out
+        return self.model(input_features) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
 
 
     def get_index(self, state, displayed_items):
@@ -84,25 +79,22 @@ class Generator_UserModel(nn.Module):
                 [batch_size (#users), num_time_steps, feature_dims]
         """
         # Convert rnn.PackedSequences to simple Tensors
-        displayed_items = displayed_items.data
-        # add batch dimension to tensors since we batched on users
-        displayed_items = displayed_items.unsqueeze(0)
+        displayed_items_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(displayed_items, batch_first=True)
         
         # Prepare input
-        # Prepare input
         batch_size = generated_action_indices.shape[0] # B
-        num_time_steps = displayed_items.shape[1] # L
+        num_time_steps = displayed_items_unpacked.shape[1] # L
         # Handle (num_displayed_items+1)^th index which refers to the user not clickin on any of the items (i.e. zero feature vector)
-        not_clicking_feature_vec = torch.zeros((batch_size, num_time_steps, 1, displayed_items.shape[-1])).to(self.device) # --> [batch_size (#users), max(num_time_steps), 1, feature_dim]
-        displayed_items = torch.cat((displayed_items.to(self.device), not_clicking_feature_vec), -2) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1), feature_dims]
+        not_clicking_feature_vec = torch.zeros((batch_size, num_time_steps, 1, displayed_items_unpacked.shape[-1])).to(self.device) # --> [batch_size (#users), max(num_time_steps), 1, feature_dim]
+        displayed_items_unpacked = torch.cat((displayed_items_unpacked.to(self.device), not_clicking_feature_vec), -2) # --> [batch_size (#users), num_time_steps, (num_displayed_items+1), feature_dims]
 
         # Extract the feature vectors that correspond to the generated action indices
         #TODO implement this faster
-        generated_action_vectors = torch.zeros((generated_action_indices.shape[0], generated_action_indices.shape[1], displayed_items.shape[-1])) # --> [batch_size (#users), num_time_steps, feature_dims]
+        generated_action_vectors = torch.zeros((generated_action_indices.shape[0], generated_action_indices.shape[1], displayed_items_unpacked.shape[-1])) # --> [batch_size (#users), num_time_steps, feature_dims]
         for b in range(generated_action_indices.shape[0]): # batch index
             for t in range(generated_action_indices.shape[1]): # time step index
                 chosen_index = generated_action_indices[b, t]
-                generated_action_vectors[b, t, :] = displayed_items[b, t, chosen_index, :]
+                generated_action_vectors[b, t, :] = displayed_items_unpacked[b, t, chosen_index, :]
 
         return generated_action_vectors # --> [batch_size (#users), num_time_steps, feature_dims]
 
