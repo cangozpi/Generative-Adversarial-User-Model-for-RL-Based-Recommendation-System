@@ -1,14 +1,14 @@
 
-history_input_size: 890 # yelp = 804, rsc = 890, tb = 4042
+history_input_size: 804 # yelp = 804, rsc = 890, tb = 4042
 history_hidden_size: 512
 history_num_layers: 8
 
-generator_input_size: 10302  # yelp = 9356, rsc = 10302, tb = 44974
+generator_input_size: 9356  # yelp = 9356, rsc = 10302, tb = 44974
 generator_output_size: 11
 generator_n_hidden: 8
 generator_hidden_dim: 512 
 
-discriminator_input_size: 10302 # yelp = 9356, rsc = 10302, tb = 44974
+discriminator_input_size: 9356 # yelp = 9356, rsc = 10302, tb = 44974
 discriminator_output_size: 11
 discriminator_n_hidden: 8
 discriminator_hidden_dim: 512
@@ -17,6 +17,7 @@ lr: 0.0006
 betas: [0.3,0.999]
 epochs: 2
 batch_size: 16
+k: [1, 2] # top k@precision's k values
 
 load_pretrained: False # load history_lstm, generator, and discrminator from checkpoints if given True
 ckpt_path: "checkpoints" # folder path to checkpoints

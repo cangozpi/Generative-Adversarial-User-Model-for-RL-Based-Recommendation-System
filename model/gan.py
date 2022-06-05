@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 # import custom models
 from model.historyLSTM import History_LSTM
 from model.generator import Generator_UserModel
@@ -410,9 +411,13 @@ class GAN():
                 Loaded best real validation loss: {dreal_loaded_loss}, Loaded best fake validation loss: {dfake_loaded_loss}")
         # ==================
 
-
+        top_k_precisions_list = [] # top k@precision 
+        for k in self.config_dict["k"]: # initialize list
+            top_k_precisions_list.append(list())
+                
         test_cur_dreal_loss = 0 # total loss for cur batch
         test_cur_dfake_loss = 0 # total loss for cur batch
+        
         for real_click_history, display_set, clicked_items  in test_dataloader:
             # real_click_history --> [max(num_time_steps), feature_dim]
             # display_set --> [max(num_time_steps), num_displayed_item, feature_dim]
@@ -428,9 +433,59 @@ class GAN():
                 # Calculate the rewards for all of the possible actions (items in the (display_set+1))
                 dreal_reward = self.discriminator_RewardModel.forward(real_states, display_set) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
                 
+                
+                # ===============
+                # Find unpadded indices of the displayed_set
+                unpacked_displayed_items, lens_displayed_item = torch.nn.utils.rnn.pad_packed_sequence(display_set, batch_first=True)
+                # unpacked_displayed_items --> [B, max(num_time_steps), padded_display_set, feature_dim]
+                display_unpadded_indices = []
+                for b in range(unpacked_displayed_items.shape[0]):
+                    cur_l_indices = []
+                    for l in range(unpacked_displayed_items.shape[1]):
+                        cur_t_indices = []
+                        for i, item in enumerate(unpacked_displayed_items[b,l, :]):
+                            # item --> [feature_dim]
+                            if item.sum() != item.shape[-1]: # input is a padding vector for displayed_items (full 1 Tensor [1,1,1 ..., 1])
+                                cur_t_indices.append(i)
+                        cur_t_indices.append(len(unpacked_displayed_items[b,l, :])) # append non_clicking vector
+                        cur_l_indices.append(cur_t_indices)
+                                
+                    display_unpadded_indices.append(cur_l_indices)
+                
+                # display_unpadded_indices --> [B, l, value]
+
+
+                # Find max k indices which are not padded in the displayed_items
+                # dreal_reward --> [B, l, max(num_displayed_item)]
+                # unpacked_clicked_items --> [B, l]
+                # lens_clicked_item --> [l]
+                unpacked_clicked_items, lens_clicked_item = torch.nn.utils.rnn.pad_packed_sequence(clicked_items, batch_first=True)
+                for k in self.config_dict["k"]:
+                    precision_list = []
+                    for b in range(dreal_reward.shape[0]):
+                        for l in range(lens_clicked_item[b]):
+                            # dreal_reward[b,l,:] --> 11
+                            # find max k indices
+                            unpadded_display_set = torch.gather(dreal_reward[b, l, :], 0, torch.tensor(display_unpadded_indices[b][l]))
+                            # chose max k from unpadded_display_set
+                            _, top_k_pred = torch.topk(unpadded_display_set, k)
+                            
+                            top_k_pred = top_k_pred.tolist()
+                            # find real user's choice index
+                            real_indices = unpacked_clicked_items[b, l]
+                            
+                            if real_indices in top_k_pred: # if the discriminator guessed right
+                                precision_list.append(1)
+                            else: # if the discriminator couldn't guess right
+                                precision_list.append(0)
+                    
+                    top_k_precisions_list[k-1].extend(precision_list)
+                # =====================
+                
+                
+
                 # Calculate the rewards for the real user actions by masking by the actions taken by the real user
                 class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
-                
                 
 
                 clicked_items_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(clicked_items, batch_first=True)
@@ -475,6 +530,17 @@ class GAN():
                 # record losses
                 test_cur_dfake_loss += dfake_loss.detach().cpu().numpy()
                 test_cur_dreal_loss += dreal_loss.detach().cpu().numpy()
+        
+        # calculate top k@prec
+        top_k_precicions = []
+        for e in top_k_precisions_list:
+            top_k_precicions.append(sum(e)/len(e))
+
+        print("*"*10)
+        for k in self.config_dict["k"]:
+            print(f"Prec@{k}= {top_k_precicions[k-1]}")
+        print("*"*10)
+                
 
         print(f"test_cur_dfake_loss: {test_cur_dfake_loss}, test_cur_dreal_loss: {test_cur_dreal_loss}")
         print("_" * 25)

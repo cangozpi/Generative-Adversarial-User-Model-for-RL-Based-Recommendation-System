@@ -41,7 +41,7 @@ class Discriminator_RewardModel(nn.Module):
         if isinstance(state, torch.nn.utils.rnn.PackedSequence):
             state, _ = torch.nn.utils.rnn.pad_packed_sequence(state, batch_first=True)
         if isinstance(displayed_items, torch.nn.utils.rnn.PackedSequence):
-            displayed_items, _ = torch.nn.utils.rnn.pad_packed_sequence(displayed_items, batch_first=True)
+            displayed_items, lens_displayed_item = torch.nn.utils.rnn.pad_packed_sequence(displayed_items, batch_first=True)
         
         # Prepare input
         batch_size = state.shape[0] # B
@@ -52,6 +52,6 @@ class Discriminator_RewardModel(nn.Module):
         displayed_items_flat = displayed_items.view(batch_size, num_time_steps, -1) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)*feature_dims]
         input_features = torch.cat((displayed_items_flat, state), dim=-1) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items*feature_dims) + state_dim]
         
-        
+            
         return self.model(input_features) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
         
