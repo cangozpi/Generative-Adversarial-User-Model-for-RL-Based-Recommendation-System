@@ -437,6 +437,8 @@ class GAN():
                 # ===============
                 # Find unpadded indices of the displayed_set
                 unpacked_displayed_items, lens_displayed_item = torch.nn.utils.rnn.pad_packed_sequence(display_set, batch_first=True)
+                unpacked_displayed_items = unpacked_displayed_items.to(self.device)
+                lens_displayed_item = lens_displayed_item.to(self.device)
                 # unpacked_displayed_items --> [B, max(num_time_steps), padded_display_set, feature_dim]
                 display_unpadded_indices = []
                 for b in range(unpacked_displayed_items.shape[0]):
@@ -460,13 +462,15 @@ class GAN():
                 # unpacked_clicked_items --> [B, l]
                 # lens_clicked_item --> [l]
                 unpacked_clicked_items, lens_clicked_item = torch.nn.utils.rnn.pad_packed_sequence(clicked_items, batch_first=True)
+                unpacked_clicked_items =  unpacked_clicked_items.to(self.device)
+                lens_clicked_item = lens_clicked_item.to(self.device)
                 for k in self.config_dict["k"]:
                     precision_list = []
                     for b in range(dreal_reward.shape[0]):
                         for l in range(lens_clicked_item[b]):
                             # dreal_reward[b,l,:] --> 11
                             # find max k indices
-                            unpadded_display_set = torch.gather(dreal_reward[b, l, :], 0, torch.tensor(display_unpadded_indices[b][l]))
+                            unpadded_display_set = torch.gather(dreal_reward[b, l, :], 0, torch.tensor(display_unpadded_indices[b][l]).to(self.device))
                             # chose max k from unpadded_display_set
                             _, top_k_pred = torch.topk(unpadded_display_set, k)
                             
