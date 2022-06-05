@@ -5,6 +5,8 @@ from copy import deepcopy
 import argparse
 from torch.utils.data import DataLoader
 
+import torch
+
 
 
 def arg_parse():
@@ -57,18 +59,27 @@ if __name__ == "__main__":
     # Parse the configurations yaml file
     config_dict = parse_config_yaml(args.config_path)
 
+       # Initialize dataloaders
+    data_folder = args.data_folder
+    dset = args.dataset # choose rsc, tb, or yelp
+    assert dset in ["yelp", "rsc", "tb"]
+    train_dataloader, val_dataloader, test_dataloader = get_dataLoaders(data_folder, dset, config_dict['batch_size'])
+
+    real_click_history, display_set, clicked_items = next(iter(train_dataloader))
+    display_set_unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(display_set, batch_first=True)
+                        
+    config_dict["generator_output_size"] = display_set_unpacked.shape[-2] + 1
+    config_dict["discriminator_output_size"] = display_set_unpacked.shape[-2] + 1
+    config_dict["history_input_size"] = display_set_unpacked.shape[-1]
+    config_dict["generator_input_size"] = config_dict["history_hidden_size"] + (config_dict["generator_output_size"] * config_dict["history_input_size"])
+    config_dict["discriminator_input_size"] = config_dict["history_hidden_size"] + (config_dict["discriminator_output_size"] * config_dict["history_input_size"])
+
     # Initialize the GAN model
     gan = GAN(config_dict, config_dict['history_input_size'], config_dict['history_hidden_size'], config_dict['history_num_layers'], \
         config_dict['generator_input_size'], config_dict['generator_output_size'], config_dict['generator_n_hidden'], config_dict['generator_hidden_dim'], \
             config_dict['discriminator_input_size'], config_dict['discriminator_output_size'], config_dict['discriminator_n_hidden'], config_dict['discriminator_hidden_dim'], \
                 lr=config_dict['lr'], betas=config_dict['betas'], epochs=config_dict['epochs'])
 
-
-    # Initialize dataloaders
-    data_folder = args.data_folder
-    dset = args.dataset # choose rsc, tb, or yelp
-    assert dset in ["yelp", "rsc", "tb"]
-    train_dataloader, val_dataloader, test_dataloader = get_dataLoaders(data_folder, dset, config_dict['batch_size'])
 
     # Train/Test using the GAN model
     if args.mode == "train":
