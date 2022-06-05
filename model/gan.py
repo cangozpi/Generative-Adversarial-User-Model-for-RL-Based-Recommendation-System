@@ -1,10 +1,10 @@
-from cProfile import label
 import torch
 # import custom models
 from model.historyLSTM import History_LSTM
 from model.generator import Generator_UserModel
 from model.discriminator import Discriminator_RewardModel
 import matplotlib.pyplot as plt
+import os
 
 def plot_results(dreal_losses, dfake_losses, val_dreal_losses, val_dfake_losses):
     plt.figure()
@@ -29,7 +29,7 @@ def plot_results(dreal_losses, dfake_losses, val_dreal_losses, val_dfake_losses)
 
 # Note that GAN is a model which orchestrated the mini-max game (training) between the  discriminator and the  generator model.
 class GAN():
-    def __init__(self, history_input_size, history_hidden_size, history_num_layers, \
+    def __init__(self, config_dict, history_input_size, history_hidden_size, history_num_layers, \
         generator_input_size, generator_output_size, generator_n_hidden, generator_hidden_dim, \
             discriminator_input_size, discriminator_output_size, discriminator_n_hidden, discriminator_hidden_dim, \
                 lr=0.0006, betas=[0.3,0.999], epochs=150):        
@@ -63,8 +63,8 @@ class GAN():
         self.lr = lr
         self.betas = betas
         self.epochs = epochs
+        self.config_dict = config_dict
         
-
     
     def gan_training_loop(self, train_loader, validation_loader):
         """
@@ -81,6 +81,32 @@ class GAN():
         generator_optimizer = torch.optim.Adam(self.generator_UserModel.parameters(), lr=self.lr, betas=self.betas)
 
 
+        # ============= Load models from ckpts
+        loaded_epoch = 0
+        dreal_loaded_loss = None
+        dfake_loaded_loss = None
+        if self.config_dict["load_pretrained"]:
+            history_ckpt = torch.load(os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_history_lstm_path"]))
+            generator_ckpt = torch.load(os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_generator_path"]))
+            discriminator_ckpt = torch.load(os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_discriminator_path"]))
+
+            self.history_LSTM.load_state_dict(history_ckpt["state_dict"])
+            self.generator_UserModel.load_state_dict(generator_ckpt["state_dict"])
+            self.discriminator_RewardModel.load_state_dict(discriminator_ckpt["state_dict"])
+
+            history_LSTM_optimizer.load_state_dict(history_ckpt["optimizer_state_dict"])
+            discriminator_optimizer.load_state_dict(discriminator_ckpt["optimizer_state_dict"])
+            generator_optimizer.load_state_dict(generator_ckpt["optimizer_state_dict"])
+
+            loaded_epoch = generator_ckpt["epoch"]
+            dreal_loaded_loss = generator_ckpt["dreal_loss"]
+            dfake_loaded_loss = generator_ckpt["dfake_loss"]
+            print(f"Loaded History_lstm, Discriminator, and Generator from saved ckpt. Loaded epoch:{loaded_epoch}, \
+                Loaded best real validation loss: {dreal_loaded_loss}, Loaded best fkae validation loss: {dfake_loaded_loss}")
+        # ================
+
+
+
         # Initialize empty lists to hold the generator and discriminator losses
         dfake_losses = [] # training losses
         dreal_losses = []
@@ -91,7 +117,9 @@ class GAN():
         print("Training GAN Model")
         print("*" * 30)
 
-        for epoch in range(self.epochs): 
+        for epoch in range(self.epochs - loaded_epoch): 
+            dreal_best_val_loss = None if dreal_loaded_loss == None else dreal_loaded_loss # best validation loss (used during saving checkpoints)
+            dfake_best_val_loss = None if dfake_loaded_loss == None else dfake_loaded_loss # best validation loss (used during saving checkpoints)
             cur_dreal_loss = 0 # total loss for cur batch
             cur_dfake_loss = 0 # total loss for cur batch
             for real_click_history, display_set, clicked_items  in train_loader:
@@ -236,12 +264,12 @@ class GAN():
                     generator_optimizer.step()
 
                     # record losses
-                    cur_dfake_loss += dreal_loss.detach().cpu().numpy()
-                    cur_dreal_loss += dfake_loss.detach().cpu().numpy()
+                    cur_dfake_loss += dfake_loss.detach().cpu().numpy()
+                    cur_dreal_loss += dreal_loss.detach().cpu().numpy()
 
             # logging
-            dreal_losses.append(cur_dfake_loss)
-            dfake_losses.append(cur_dreal_loss)
+            dreal_losses.append(cur_dreal_loss)
+            dfake_losses.append(cur_dfake_loss)
 
         
 
@@ -302,18 +330,55 @@ class GAN():
                             cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask.float() # --> [1, t+1, (num_displayed_items+1)]
                             gen_reward += torch.sum(cur_gen_reward) / cur_gen_reward.shape[1]
                     
-                    dfake_loss = gen_reward # total loss/rewards for the real user actions (gt)
+                    dfake_loss = -1 * gen_reward # total loss/rewards for the real user actions (gt)
 
                     # record losses
-                    val_cur_dfake_loss += dreal_loss.detach().cpu().numpy()
-                    val_cur_dreal_loss += dfake_loss.detach().cpu().numpy()
+                    val_cur_dfake_loss += dfake_loss.detach().cpu().numpy()
+                    val_cur_dreal_loss += dreal_loss.detach().cpu().numpy()
 
+
+            # =========== Save Checkpoints
+            if (dfake_best_val_loss == None) or (dfake_best_val_loss >= val_cur_dfake_loss):
+                if not os.path.exists(self.config_dict["ckpt_path"]):
+                    os.mkdir(self.config_dict["ckpt_path"])
+
+                dfake_best_val_loss = val_cur_dfake_loss
+                # Save history_lstm
+                torch.save({
+                    'epoch': epoch + loaded_epoch,
+                    'state_dict': self.history_LSTM.state_dict(),
+                    'optimizer_state_dict': history_LSTM_optimizer.state_dict(),
+                    'dfake_loss': dfake_best_val_loss,
+                    'dreal_loss': val_cur_dreal_loss,
+                }, os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_history_lstm_path"]))
+
+                # Save Generator
+                torch.save({
+                    'epoch': epoch + loaded_epoch,
+                    'state_dict': self.generator_UserModel.state_dict(),
+                    'optimizer_state_dict': generator_optimizer.state_dict(),
+                    'dfake_loss': dfake_best_val_loss,
+                    'dreal_loss': val_cur_dreal_loss,
+                }, os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_generator_path"]))
+
+                # Save Discriminator
+                torch.save({
+                    'epoch': epoch + loaded_epoch,
+                    'state_dict': self.discriminator_RewardModel.state_dict(),
+                    'optimizer_state_dict': discriminator_optimizer.state_dict(),
+                    'dreal_loss': dfake_best_val_loss,
+                    'dreal_loss': val_cur_dreal_loss,
+                }, os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_discriminator_path"]))
+
+                print("*" * 20)
+                print(f"Saved model checkpoint at epoch: {epoch+loaded_epoch}")
+            
             # logging
-            val_dreal_losses.append(val_cur_dfake_loss)
-            val_dfake_losses.append(val_cur_dreal_loss)
+            val_dreal_losses.append(val_cur_dreal_loss)
+            val_dfake_losses.append(val_cur_dfake_loss)
 
             print("_" * 25)
-            print(f"epoch: [{epoch+1}/{self.epochs}], train_dreal_loss: {dreal_losses[-1]}, train_dfake_loss: {dfake_losses[-1]} \
+            print(f"epoch: [{epoch+1+loaded_epoch}/{self.epochs}], train_dreal_loss: {dreal_losses[-1]}, train_dfake_loss: {dfake_losses[-1]} \
                 val_dreal_loss: {val_dreal_losses[-1]}, val_dfake_loss: {val_dfake_losses[-1]}")
             print("_" * 25)
 
@@ -322,8 +387,99 @@ class GAN():
         return dreal_losses, dfake_losses, val_dreal_losses, val_dfake_losses
 
 
-    def test(self):
-        pass #TODO: fill in this method
+    def test(self, test_dataloader):
+        print("*" * 30)
+        print("Testing GAN Model")
+        print("*" * 30)
+
+        # ================== Load ckpt
+        if self.config_dict["load_pretrained"]:
+            history_ckpt = torch.load(os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_history_lstm_path"]))
+            generator_ckpt = torch.load(os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_generator_path"]))
+            discriminator_ckpt = torch.load(os.path.join(self.config_dict["ckpt_path"], self.config_dict["pretrained_discriminator_path"]))
+
+            self.history_LSTM.load_state_dict(history_ckpt["state_dict"])
+            self.generator_UserModel.load_state_dict(generator_ckpt["state_dict"])
+            self.discriminator_RewardModel.load_state_dict(discriminator_ckpt["state_dict"])
+
+           
+            loaded_epoch = generator_ckpt["epoch"]
+            dreal_loaded_loss = generator_ckpt["dreal_loss"]
+            dfake_loaded_loss = generator_ckpt["dfake_loss"]
+            print(f"Loaded History_lstm, Discriminator, and Generator from saved ckpt. Loaded epoch:{loaded_epoch}, \
+                Loaded best real validation loss: {dreal_loaded_loss}, Loaded best fake validation loss: {dfake_loaded_loss}")
+        # ==================
+
+
+        test_cur_dreal_loss = 0 # total loss for cur batch
+        test_cur_dfake_loss = 0 # total loss for cur batch
+        for real_click_history, display_set, clicked_items  in test_dataloader:
+            # real_click_history --> [max(num_time_steps), feature_dim]
+            # display_set --> [max(num_time_steps), num_displayed_item, feature_dim]
+            # clicked_items --> [max(num_time_steps)] display set index of the clicked items by the real user (gt user actions)
+            
+            real_click_history = real_click_history.to(self.device)
+            display_set = display_set.to(self.device)
+            clicked_items = clicked_items.to(self.device)
+
+            with torch.no_grad():
+                # Obtain state representations given the real user's past click history
+                real_states = self.history_LSTM(real_click_history) # --> [batch_size (#users)=1, num_time_steps, state_dim]
+                # Calculate the rewards for all of the possible actions (items in the (display_set+1))
+                dreal_reward = self.discriminator_RewardModel.forward(real_states, display_set) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
+                
+                # Calculate the rewards for the real user actions by masking by the actions taken by the real user
+                class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
+                
+                
+
+                clicked_items_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(clicked_items, batch_first=True)
+                clicked_item_mask = torch.nn.functional.one_hot(clicked_items_unpacked.long(), num_classes= class_num) # --> [batch_size (#users), max(num_time_steps), (num_displayed_items+1)]
+                gt_reward = dreal_reward * clicked_item_mask.float()
+                dreal_loss = torch.sum(gt_reward) / dreal_reward.shape[1] # avg loss/rewards for the real user actions (gt)
+
+
+
+                # ========== generator_UserModel Loss Calculation below: 
+                # Obtain generated user action's indices/feature vectors for 1 time step ahead given the past real users state representation
+                generated_action_indices , generated_action_vectors = self.generator_UserModel.generate_actions(real_states, display_set)  # --> [batch_size (#users), num_time_steps] , [batch_size (#users), num_time_steps, feature_dims]
+                # convert rnn.PackedSequence to Tensor
+                real_click_history_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(real_click_history, batch_first=True)
+                # generated_action_vectors --> [batch_size (#users), num_time_steps, feature_dims]
+                gen_reward = torch.tensor(0).float().to(self.device)
+                for b in range(generated_action_vectors.shape[0]): # index on batch_size
+                    for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
+                        cur_generated_action_vector = generated_action_vectors[b, t, :].to(self.device) # --> [feature_dim]
+                        cur_real_past_actions = real_click_history_unpacked[b, :t, :].to(self.device) # --> [t, feature_dim]
+                        # append generated action to past history from the real user
+                        cur_generated_action_with_history = torch.cat((cur_real_past_actions, cur_generated_action_vector.unsqueeze(0)), dim=0) # --> [t+1, feature_dim]
+                        cur_generated_action_with_history = cur_generated_action_with_history.unsqueeze(0) # --> [1, t+1, feature_dim]
+                        # obtain new state representations after taking the current generated action
+                        cur_fake_state = self.history_LSTM(cur_generated_action_with_history) # --> [1, t+1, state_dim]
+                        # calculate the reward for the currently generated action
+                        display_set_unpacked, _ = torch.nn.utils.rnn.pad_packed_sequence(display_set, batch_first=True)
+                        cur_display_set = display_set_unpacked[b, :t+1, :, :].unsqueeze(0) # --> [1, t+1, num_displayed_item, feature_dim]
+                        cur_dfake_reward = self.discriminator_RewardModel(cur_fake_state, cur_display_set) # --> [1, t+1, (num_displayed_items+1)]
+
+                        # Calculate the rewards for the generated user actions by masking by the generated rewards for all of the possible acitons in the display_set
+                        cur_generated_action_indices = generated_action_indices[b, :t+1].unsqueeze(0) # --> [1, t+1]
+                        
+                        class_num = ((display_set.data.shape[1])+1) # (num_displayed_items+1)
+                        cur_clicked_item_mask = torch.nn.functional.one_hot(cur_generated_action_indices, num_classes= class_num) # --> [1, t+1, (num_displayed_items+1)]
+                        
+                        cur_gen_reward = cur_dfake_reward * cur_clicked_item_mask.float() # --> [1, t+1, (num_displayed_items+1)]
+                        gen_reward += torch.sum(cur_gen_reward) / cur_gen_reward.shape[1]
+                
+                dfake_loss = -1 * gen_reward # total loss/rewards for the real user actions (gt)
+
+                # record losses
+                test_cur_dfake_loss += dfake_loss.detach().cpu().numpy()
+                test_cur_dreal_loss += dreal_loss.detach().cpu().numpy()
+
+        print(f"test_cur_dfake_loss: {test_cur_dfake_loss}, test_cur_dreal_loss: {test_cur_dreal_loss}")
+        print("_" * 25)
+
+        return test_cur_dreal_loss, test_cur_dfake_loss
 
 
 

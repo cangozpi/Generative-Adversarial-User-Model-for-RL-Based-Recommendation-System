@@ -3,3 +3,5 @@ temp*
 model/__pycache__/
 results/*
 !results/.gitkeep 
+checkpoints/*
+!checkpoints/.gitkeep

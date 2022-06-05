@@ -18,6 +18,12 @@ betas: [0.3,0.999]
 epochs: 2
 batch_size: 16
 
+load_pretrained: True
+ckpt_path: "checkpoints"
+pretrained_history_lstm_path: "best_lstm_ckpt.pth.tar"
+pretrained_discriminator_path: "best_discriminator_ckpt.pth.tar"
+pretrained_generator_path: "best_generator_ckpt.pth.tar"
+
 
 
 # == Parameters of the History_LSTM:

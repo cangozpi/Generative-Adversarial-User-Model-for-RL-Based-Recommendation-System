@@ -59,7 +59,7 @@ if __name__ == "__main__":
     config_dict = parse_config_yaml(args.config_path)
 
     # Initialize the GAN model
-    gan = GAN( config_dict['history_input_size'], config_dict['history_hidden_size'], config_dict['history_num_layers'], \
+    gan = GAN(config_dict, config_dict['history_input_size'], config_dict['history_hidden_size'], config_dict['history_num_layers'], \
         config_dict['generator_input_size'], config_dict['generator_output_size'], config_dict['generator_n_hidden'], config_dict['generator_hidden_dim'], \
             config_dict['discriminator_input_size'], config_dict['discriminator_output_size'], config_dict['discriminator_n_hidden'], config_dict['discriminator_hidden_dim'], \
                 lr=config_dict['lr'], betas=config_dict['betas'], epochs=config_dict['epochs'])
@@ -75,5 +75,4 @@ if __name__ == "__main__":
     if args.mode == "train":
         train_dreal_losses, train_dfake_losses, val_dreal_losses, val_dfake_losses = gan.gan_training_loop(train_dataloader, val_dataloader)
     else:
-        # gan.test(test_dataloader) #TODO
-        pass
+        test_cur_dreal_loss, test_cur_dfake_loss = gan.test(test_dataloader)
