@@ -15,10 +15,6 @@ class History_LSTM(nn.Module):
         self.num_layers = num_layers
         self.state_dim = hidden_size
         self.lstm_model = torch.nn.LSTM(input_size, self.state_dim, self.num_layers, batch_first=True).to(self.device)
-        
-        # ınitialize hidden and cell state
-        # self.h0 = torch.zeros(self.num_layers, 1, self.state_dim).to(self.device)
-        # self.c0= torch.zeros(self.num_layers, 1, self.state_dim).to(self.device)
 
 
     def forward(self, actions):
@@ -32,6 +28,5 @@ class History_LSTM(nn.Module):
             (h, c) (tuple): hidden and cell states. 
             Note that the returned new_state tensor is of same shape as the old_state tensor. 
         """
-        # out, _ = self.lstm_model(actions, (self.h0, self.c0))
         out, _ = self.lstm_model(actions)
         return out 
