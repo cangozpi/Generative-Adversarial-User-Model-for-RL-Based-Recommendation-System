@@ -412,6 +412,7 @@ class GAN():
         # ==================
 
         top_k_precisions_list = [] # top k@precision 
+        generator_precision = []
         for k in self.config_dict["k"]: # initialize list
             top_k_precisions_list.append(list())
                 
@@ -503,9 +504,39 @@ class GAN():
                 # Obtain generated user action's indices/feature vectors for 1 time step ahead given the past real users state representation
                 generated_action_indices , generated_action_vectors = self.generator_UserModel.generate_actions(real_states, display_set)  # --> [batch_size (#users), num_time_steps] , [batch_size (#users), num_time_steps, feature_dims]
                 # convert rnn.PackedSequence to Tensor
+                
+                
+                
+                generator_precision_list = []
+                for b in range(generated_action_indices.shape[0]):
+                    for l in range(generated_action_indices[b]):
+                            # dreal_reward[b,l,:] --> 11
+                            # find max k indices
+                        generated_actions = torch.gather(generated_action_indices[b, l, :], 0, torch.tensor(display_unpadded_indices[b][l]).to(self.device))
+                            # chose max k from unpadded_display_set
+                        _, top_1_pred = torch.topk(generated_actions, 1)
+                            
+                        top_1_pred = top_1_pred.tolist()
+                            # find real user's choice index
+                        real_indices = generated_action_indices[b, l]
+                            
+                        if real_indices in top_k_pred: # if the discriminator guessed right
+                            generator_precision_list.append(1)
+                        else: # if the discriminator couldn't guess right
+                            generator_precision_list.append(0)
+                    
+                generator_precision[0].extend(generator_precision_list)
+                
+                
+                
+                
+                
+                
                 real_click_history_unpacked, lens_unpacked = torch.nn.utils.rnn.pad_packed_sequence(real_click_history, batch_first=True)
                 # generated_action_vectors --> [batch_size (#users), num_time_steps, feature_dims]
                 gen_reward = torch.tensor(0).float().to(self.device)
+                
+                
                 for b in range(generated_action_vectors.shape[0]): # index on batch_size
                     for t in range(1, generated_action_vectors.shape[1]): # index on num_time_steps (L)
                         cur_generated_action_vector = generated_action_vectors[b, t, :].to(self.device) # --> [feature_dim]
@@ -534,6 +565,8 @@ class GAN():
                 # record losses
                 test_cur_dfake_loss += dfake_loss.detach().cpu().numpy()
                 test_cur_dreal_loss += dreal_loss.detach().cpu().numpy()
+        
+        print(np.mean(generator_precision))
         
         # calculate top k@prec
         top_k_precicions = []
