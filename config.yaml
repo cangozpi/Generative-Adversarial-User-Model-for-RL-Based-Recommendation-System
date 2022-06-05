@@ -1,14 +1,14 @@
 
-history_input_size: 804
+history_input_size: 890 # yelp = 804, rsc = 890, tb = 4042
 history_hidden_size: 512
 history_num_layers: 8
 
-generator_input_size: 9356
+generator_input_size: 10302  # yelp = 9356, rsc = 10302, tb = 44974
 generator_output_size: 11
 generator_n_hidden: 8
 generator_hidden_dim: 512 
 
-discriminator_input_size: 9356 
+discriminator_input_size: 10302 # yelp = 9356, rsc = 10302, tb = 44974
 discriminator_output_size: 11
 discriminator_n_hidden: 8
 discriminator_hidden_dim: 512
@@ -18,15 +18,15 @@ betas: [0.3,0.999]
 epochs: 2
 batch_size: 16
 
-load_pretrained: True
-ckpt_path: "checkpoints"
-pretrained_history_lstm_path: "best_lstm_ckpt.pth.tar"
-pretrained_discriminator_path: "best_discriminator_ckpt.pth.tar"
-pretrained_generator_path: "best_generator_ckpt.pth.tar"
+load_pretrained: False # load history_lstm, generator, and discrminator from checkpoints if given True
+ckpt_path: "checkpoints" # folder path to checkpoints
+pretrained_history_lstm_path: "best_lstm_ckpt.pth.tar" # history_lstm checkpoint to save/load model
+pretrained_discriminator_path: "best_discriminator_ckpt.pth.tar" # discriminator checkpoint to save/load model
+pretrained_generator_path: "best_generator_ckpt.pth.tar" # generator checkpoint to save/load model
 
 
 
-# == Parameters of the History_LSTM:
+#         == Parameters of the History_LSTM:
 #             history_input_size (int): feature_dim of the actions.
 #             history_hidden_size (int): dimension of the state representation vector (dim of output of the History_LSTM)
 #             history_num_layers (int): number of recurrent layers in the History_LSTM.

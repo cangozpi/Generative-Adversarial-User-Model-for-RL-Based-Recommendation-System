@@ -18,7 +18,6 @@ class Dataset(nn.Module):
         """
         assert split in ["train", "test", "validation"]
         data_folder = "./dropbox"
-        dset = "yelp" # choose rsc, tb, or yelp
 
         data_filename = os.path.join(data_folder, dset+'.pkl')
         f = open(data_filename, 'rb')

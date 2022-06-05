@@ -34,8 +34,7 @@ def parse_config_yaml(file_path):
     """
     with open(file_path) as config_yaml:
         config_dict_yaml = yaml.load(config_yaml, Loader=yaml.SafeLoader)
-        config_dict = deepcopy(config_dict_yaml)
-    return config_dict
+    return config_dict_yaml
 
 
 def get_dataLoaders(data_folder, dset, batch_size):
