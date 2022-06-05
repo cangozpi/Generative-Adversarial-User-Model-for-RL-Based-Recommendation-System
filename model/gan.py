@@ -1,3 +1,4 @@
+from distutils.command.config import config
 import torch
 import numpy as np
 # import custom models
@@ -566,7 +567,9 @@ class GAN():
         for e in top_k_precisions_list:
             top_k_precicions.append(sum(e)/len(e))
 
+        padded_display_set_size = self.config_dict["generator_output_size"]
         print("*"*10)
+        print(f"Padded Display set size = {padded_display_set_size}")
         for k in self.config_dict["k"]:
             print(f"Greedy Discriminator Reward Model Prec@{k} = {top_k_precicions[k-1]}")
 
